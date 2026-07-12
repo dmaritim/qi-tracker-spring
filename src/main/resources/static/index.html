@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>QI Tracker</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#F5F7F6; --surface:#FFFFFF; --ink:#16262B; --ink-soft:#5B6E73; --ink-faint:#93A3A6;
+    --border:#DCE4E2; --grid-line:#E7ECEA; --teal:#2C6E63; --teal-dark:#1F4F47; --teal-tint:#E4EFEC;
+    --amber:#B9822C; --amber-tint:#F6ECDA; --brick:#B14A3E; --brick-tint:#F5E4E1;
+    --steel:#45688C; --steel-tint:#E7EDF3; --grey-tint:#EEF1F0;
+    --radius:10px; --shadow:0 1px 2px rgba(22,38,43,0.06), 0 4px 16px rgba(22,38,43,0.05);
+    --font-display:'Space Grotesk',sans-serif; --font-body:'Inter',sans-serif; --font-mono:'IBM Plex Mono',monospace;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{background:var(--bg);color:var(--ink);font-family:var(--font-body);font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased;}
+  button{font-family:inherit;}
+  input,select,textarea{font-family:inherit;font-size:14px;}
+  ::selection{background:var(--teal-tint);}
+
+  #app{display:flex;min-height:100vh;}
+  .sidebar{width:260px;flex-shrink:0;background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;position:sticky;top:0;height:100vh;}
+  .sidebar-brand{padding:22px 20px 16px;border-bottom:1px solid var(--border);}
+  .sidebar-brand .mark{display:flex;align-items:center;gap:9px;}
+  .sidebar-brand .name{font-family:var(--font-display);font-weight:700;font-size:16.5px;letter-spacing:-0.01em;}
+  .sidebar-brand .sub{margin-top:3px;font-size:11.5px;color:var(--ink-faint);font-family:var(--font-mono);letter-spacing:0.02em;}
+  .sidebar-list{flex:1;overflow-y:auto;padding:12px 10px;}
+  .sidebar-label{font-size:10.5px;text-transform:uppercase;letter-spacing:0.08em;color:var(--ink-faint);font-weight:600;padding:6px 10px 8px;}
+  .project-tab{display:flex;align-items:center;gap:9px;width:100%;text-align:left;padding:9px 10px;border-radius:8px;border:1px solid transparent;background:transparent;cursor:pointer;color:var(--ink);margin-bottom:2px;}
+  .project-tab:hover{background:var(--grey-tint);}
+  .project-tab.active{background:var(--teal-tint);border-color:#CDE1DB;}
+  .project-tab .dot{width:8px;height:8px;border-radius:2px;flex-shrink:0;}
+  .project-tab .label{flex:1;font-size:13.5px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .sidebar-footer{padding:14px;border-top:1px solid var(--border);}
+  .btn-new-project{width:100%;padding:10px 12px;border-radius:8px;border:1px dashed #BFD0CB;background:var(--teal-tint);color:var(--teal-dark);font-weight:600;font-size:13px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;}
+  .btn-new-project:hover{background:#D9EAE4;}
+  .user-row{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:12px;padding-top:12px;border-top:1px solid var(--border);}
+  .user-row .who{display:flex;align-items:center;gap:8px;min-width:0;}
+  .user-row .avatar{width:26px;height:26px;border-radius:50%;background:var(--teal-tint);color:var(--teal-dark);flex-shrink:0;display:flex;align-items:center;justify-content:center;font-family:var(--font-mono);font-weight:600;font-size:11px;}
+  .user-row .name{font-size:12.5px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .user-row .signout{background:none;border:none;color:var(--ink-faint);font-size:11.5px;cursor:pointer;font-weight:600;flex-shrink:0;}
+  .user-row .signout:hover{color:var(--brick);}
+
+  .main{flex:1;min-width:0;padding:28px 36px 60px;}
+  .main-inner{max-width:1040px;margin:0 auto;}
+  .mobile-bar{display:none;}
+  @media (max-width: 860px){
+    #app{flex-direction:column;}
+    .sidebar{position:relative;height:auto;width:100%;display:none;}
+    .sidebar.open{display:flex;}
+    .mobile-bar{display:flex;align-items:center;justify-content:space-between;padding:14px 18px;background:var(--surface);border-bottom:1px solid var(--border);position:sticky;top:0;z-index:20;}
+    .main{padding:20px 16px 50px;}
+  }
+
+  h1,h2,h3{font-family:var(--font-display);margin:0;letter-spacing:-0.01em;}
+  .eyebrow{font-family:var(--font-mono);font-size:11px;letter-spacing:0.06em;text-transform:uppercase;color:var(--ink-faint);margin-bottom:6px;}
+  .muted{color:var(--ink-soft);}
+  .faint{color:var(--ink-faint);}
+  .mono{font-family:var(--font-mono);}
+
+  .dash-header{display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:22px;gap:16px;flex-wrap:wrap;}
+  .dash-header h1{font-size:26px;}
+  .dash-header p{margin:6px 0 0;color:var(--ink-soft);max-width:520px;}
+  .btn-primary{background:var(--teal);color:#fff;border:none;border-radius:8px;padding:10px 16px;font-weight:600;font-size:13.5px;cursor:pointer;display:inline-flex;align-items:center;gap:7px;white-space:nowrap;}
+  .btn-primary:hover{background:var(--teal-dark);}
+  .btn-secondary{background:var(--surface);color:var(--ink);border:1px solid var(--border);border-radius:8px;padding:9px 14px;font-weight:600;font-size:13px;cursor:pointer;}
+  .btn-secondary:hover{background:var(--grey-tint);}
+  .btn-text{background:none;border:none;color:var(--teal-dark);font-weight:600;font-size:13px;cursor:pointer;padding:4px 2px;}
+  .btn-text.danger{color:var(--brick);}
+  .btn-text:hover{text-decoration:underline;}
+  .btn-icon{background:none;border:none;cursor:pointer;color:var(--ink-faint);padding:4px;border-radius:6px;display:flex;}
+  .btn-icon:hover{background:var(--grey-tint);color:var(--ink);}
+
+  .empty-state{border:1px dashed var(--border);border-radius:var(--radius);padding:48px 24px;text-align:center;background:var(--surface);}
+  .empty-state h3{font-size:16px;margin-bottom:6px;}
+  .empty-state p{color:var(--ink-soft);margin:0 0 16px;font-size:13.5px;}
+
+  .project-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px;}
+  .project-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:18px;cursor:pointer;box-shadow:var(--shadow);display:flex;flex-direction:column;gap:10px;}
+  .project-card:hover{border-color:#C6D6D1;}
+  .project-card .top{display:flex;justify-content:space-between;align-items:flex-start;gap:8px;}
+  .project-card h3{font-size:15.5px;line-height:1.3;}
+  .badge{font-size:10.5px;font-weight:600;padding:3px 8px;border-radius:20px;white-space:nowrap;font-family:var(--font-mono);letter-spacing:0.02em;}
+  .badge.ontrack{background:var(--teal-tint);color:var(--teal-dark);}
+  .badge.duesoon{background:var(--amber-tint);color:var(--amber);}
+  .badge.overdue{background:var(--brick-tint);color:var(--brick);}
+  .badge.nodata{background:var(--grey-tint);color:var(--ink-soft);}
+  .badge.role{background:var(--steel-tint);color:var(--steel);}
+  .project-card .meta-row{display:flex;gap:14px;font-size:12px;color:var(--ink-soft);flex-wrap:wrap;align-items:center;}
+  .project-card .meta-row span{display:flex;align-items:center;gap:5px;}
+  .card-performance{margin-top:2px;padding-top:12px;border-top:1px solid var(--grid-line);}
+  .perf-row{display:flex;gap:12px;flex-wrap:wrap;font-size:12px;font-family:var(--font-mono);color:var(--ink-soft);margin-bottom:8px;}
+  .perf-stat.on{color:var(--teal-dark);}
+  .perf-stat.off{color:var(--brick);}
+  .perf-bar{height:6px;background:var(--grey-tint);border-radius:5px;overflow:hidden;margin-bottom:8px;}
+  .perf-bar-fill{height:100%;background:var(--teal);border-radius:5px;}
+  .perf-meta{font-size:11.5px;color:var(--ink-faint);}
+
+  .breadcrumb{display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--ink-faint);margin-bottom:14px;cursor:pointer;width:fit-content;}
+  .breadcrumb:hover{color:var(--teal-dark);}
+  .project-header{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;margin-bottom:6px;flex-wrap:wrap;}
+  .project-header h1{font-size:24px;}
+  .project-header .actions{display:flex;gap:8px;flex-shrink:0;flex-wrap:wrap;}
+  .project-header .badge{margin-left:10px;}
+
+  .view-tabs{display:flex;gap:4px;background:var(--grey-tint);border-radius:9px;padding:3px;width:fit-content;margin:14px 0 22px;}
+  .view-tab{padding:8px 16px;border-radius:7px;font-size:13px;font-weight:600;cursor:pointer;color:var(--ink-soft);}
+  .view-tab.active{background:var(--surface);color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,0.06);}
+
+  .info-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:1px;background:var(--border);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;margin:20px 0 28px;}
+  .info-cell{background:var(--surface);padding:14px 16px;}
+  .info-cell .label{font-size:11px;text-transform:uppercase;letter-spacing:0.06em;color:var(--ink-faint);margin-bottom:5px;font-family:var(--font-mono);}
+  .info-cell .value{font-size:14px;color:var(--ink);white-space:pre-wrap;}
+  .info-cell.wide{grid-column:1/-1;}
+
+  .section-head{display:flex;justify-content:space-between;align-items:center;margin:30px 0 14px;flex-wrap:wrap;gap:8px;}
+  .section-head h2{font-size:16.5px;}
+  .section-head .count{font-family:var(--font-mono);font-size:12px;color:var(--ink-faint);margin-left:8px;}
+  .section-head .actions{display:flex;gap:8px;}
+
+  .area-group{margin-bottom:26px;}
+  .area-title{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px;}
+  .area-title h3{font-size:14.5px;color:var(--ink-soft);text-transform:uppercase;letter-spacing:0.04em;font-family:var(--font-mono);font-weight:600;}
+  .area-title .actions{display:flex;gap:4px;}
+
+  .indicator{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:18px 20px;margin-bottom:14px;box-shadow:var(--shadow);}
+  .indicator-top{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;}
+  .indicator-top h3{font-size:15px;margin-bottom:3px;}
+  .indicator-top .optimal{font-size:12.5px;color:var(--ink-soft);max-width:520px;}
+  .indicator-top .actions{display:flex;gap:6px;flex-shrink:0;align-items:center;}
+  .indicator-stats{display:flex;gap:22px;margin-top:14px;flex-wrap:wrap;}
+  .stat .num{font-family:var(--font-mono);font-size:19px;font-weight:600;}
+  .stat .lbl{font-size:11px;color:var(--ink-faint);text-transform:uppercase;letter-spacing:0.05em;margin-top:2px;}
+  .indicator-chart{margin-top:12px;}
+  .entry-toggle{margin-top:10px;}
+  .entry-table{width:100%;border-collapse:collapse;margin-top:10px;font-size:12.5px;}
+  .entry-table th{text-align:left;padding:6px 8px;color:var(--ink-faint);font-weight:600;font-size:10.5px;text-transform:uppercase;letter-spacing:0.05em;border-bottom:1px solid var(--border);font-family:var(--font-mono);}
+  .entry-table td{padding:7px 8px;border-bottom:1px solid var(--grid-line);vertical-align:top;}
+  .entry-table td.val{font-family:var(--font-mono);font-weight:600;}
+  .entry-table tr:last-child td{border-bottom:none;}
+  .breakdown-line{font-size:11px;color:var(--ink-faint);margin-top:2px;}
+  .breakdown-line .sub{color:var(--brick);}
+  .breakdown-line .add{color:var(--teal-dark);}
+
+  /* Dashboard view */
+  .snapshot{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:22px 24px;box-shadow:var(--shadow);margin-bottom:26px;}
+  .snapshot-top{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap;margin-bottom:18px;}
+  .snapshot-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:16px;}
+  .snapshot-stats .stat .num{font-size:26px;}
+  .stage-box{margin-top:18px;padding-top:18px;border-top:1px solid var(--border);}
+  .stage-label-row{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px;}
+  .stage-label-row .label{font-weight:600;font-size:14px;}
+  .stage-label-row .end{font-size:12px;color:var(--ink-faint);font-family:var(--font-mono);}
+  .stage-bar{height:8px;background:var(--grey-tint);border-radius:6px;overflow:hidden;}
+  .stage-bar-fill{height:100%;background:var(--teal);border-radius:6px;}
+  .stage-bar-fill.past{background:var(--brick);}
+  .stage-meta{display:flex;justify-content:space-between;font-size:11.5px;color:var(--ink-faint);margin-top:6px;font-family:var(--font-mono);}
+
+  .trend-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px 18px;margin-bottom:12px;box-shadow:var(--shadow);}
+  .trend-top{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;}
+  .trend-top h4{font-size:14px;font-family:var(--font-body);font-weight:600;}
+  .trend-chart{margin-top:12px;}
+
+  /* Modal */
+  .overlay{position:fixed;inset:0;background:rgba(22,38,43,0.42);display:none;align-items:flex-start;justify-content:center;padding:5vh 16px;overflow-y:auto;z-index:100;}
+  .overlay.open{display:flex;}
+  .modal{background:var(--surface);border-radius:14px;width:100%;max-width:520px;box-shadow:0 12px 48px rgba(0,0,0,0.18);margin-bottom:5vh;}
+  .modal-head{padding:20px 22px 14px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;}
+  .modal-head h2{font-size:17px;}
+  .modal-body{padding:20px 22px;}
+  .modal-foot{padding:16px 22px 22px;display:flex;justify-content:flex-end;gap:10px;}
+  .field{margin-bottom:16px;}
+  .field label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);margin-bottom:6px;}
+  .field .hint{font-size:11.5px;color:var(--ink-faint);margin-top:5px;}
+  .field input[type=text],.field input[type=number],.field input[type=date],.field input[type=email],.field select,.field textarea{
+    width:100%;padding:9px 11px;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--ink);}
+  .field textarea{resize:vertical;min-height:64px;line-height:1.5;}
+  .field input:focus,.field select:focus,.field textarea:focus{outline:none;border-color:var(--teal);box-shadow:0 0 0 3px var(--teal-tint);}
+  .field-row{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+  .close-x{background:none;border:none;cursor:pointer;color:var(--ink-faint);padding:4px;border-radius:6px;}
+  .close-x:hover{background:var(--grey-tint);color:var(--ink);}
+  .radio-group{display:flex;gap:8px;flex-wrap:wrap;}
+  .radio-pill{border:1px solid var(--border);border-radius:20px;padding:7px 13px;font-size:12.5px;font-weight:500;cursor:pointer;background:var(--surface);}
+  .radio-pill.selected{background:var(--teal);border-color:var(--teal);color:#fff;font-weight:600;}
+  :focus-visible{outline:2px solid var(--teal);outline-offset:2px;}
+
+  .element-builder{display:flex;flex-direction:column;gap:6px;margin-bottom:8px;}
+  .element-row{display:flex;align-items:center;gap:8px;}
+  .element-row input[type=text]{flex:1;padding:8px 10px;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--ink);font-size:13px;}
+  .sign-toggle{width:26px;height:26px;flex-shrink:0;border-radius:7px;border:1px solid var(--border);background:var(--surface);font-family:var(--font-mono);font-weight:700;font-size:14px;cursor:pointer;color:var(--ink-soft);display:flex;align-items:center;justify-content:center;padding:0;}
+  .sign-toggle.add{background:var(--teal-tint);color:var(--teal-dark);border-color:#CDE1DB;}
+  .sign-toggle.subtract{background:var(--brick-tint);color:var(--brick);border-color:#E9CCC7;}
+  .element-row .btn-icon{flex-shrink:0;font-size:16px;line-height:1;color:var(--ink-faint);}
+  .formula-preview{background:var(--grey-tint);border:1px solid var(--border);border-radius:8px;padding:12px 14px;margin:4px 0 16px;}
+  .formula-preview .label{font-size:10.5px;text-transform:uppercase;letter-spacing:0.06em;color:var(--ink-faint);font-family:var(--font-mono);margin-bottom:5px;}
+  .formula-preview .mono{font-size:13.5px;word-break:break-word;}
+  .entry-section-label{font-size:11px;text-transform:uppercase;letter-spacing:0.06em;color:var(--ink-faint);font-family:var(--font-mono);margin:14px 0 6px;}
+  .entry-section-label:first-child{margin-top:0;}
+  .entry-el-row{display:flex;align-items:center;gap:10px;margin-bottom:8px;}
+  .entry-el-row .el-sign{width:20px;flex-shrink:0;text-align:center;font-family:var(--font-mono);font-weight:700;color:var(--ink-faint);}
+  .entry-el-row .el-name{flex:1;font-size:13px;color:var(--ink);}
+  .entry-el-row .el-input{width:110px;padding:8px 10px;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--ink);}
+
+  .member-list{display:flex;flex-direction:column;gap:8px;margin-bottom:16px;}
+  .member-row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:9px 11px;border:1px solid var(--border);border-radius:8px;background:var(--bg);}
+  .member-row .info{display:flex;flex-direction:column;}
+  .member-row .info .name{font-size:13px;font-weight:600;}
+  .member-row .info .email{font-size:11.5px;color:var(--ink-faint);}
+  .add-member-row{display:flex;gap:8px;}
+  .add-member-row input{flex:1;}
+</style>
+</head>
+<body>
+
+<div id="app">
+  <div class="mobile-bar">
+    <button class="btn-icon" onclick="toggleSidebar()" aria-label="Toggle menu">
+      <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M3 5H17M3 10H17M3 15H17" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+    </button>
+    <span style="font-family:var(--font-display);font-weight:700;font-size:15px;">QI Tracker</span>
+    <span style="width:28px;"></span>
+  </div>
+
+  <nav class="sidebar" id="sidebar">
+    <div class="sidebar-brand">
+      <div class="mark">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+          <rect x="1" y="1" width="22" height="22" rx="5" fill="#2C6E63"/>
+          <path d="M5 15L8.5 10.5L11.5 13L15 7L19 12" stroke="#EAF3F0" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+          <line x1="5" y1="17.5" x2="19" y2="17.5" stroke="#EAF3F0" stroke-width="1" stroke-dasharray="1.5 1.8" stroke-linecap="round"/>
+        </svg>
+        <div class="name">QI Tracker</div>
+      </div>
+      <div class="sub">quality improvement, tracked</div>
+    </div>
+    <div class="sidebar-list" id="sidebarList"></div>
+    <div class="sidebar-footer">
+      <button class="btn-new-project" onclick="openProjectModal()">
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M7 2V12M2 7H12" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
+        New project
+      </button>
+      <div class="user-row" id="userRow"></div>
+    </div>
+  </nav>
+
+  <main class="main"><div class="main-inner" id="mainContent"></div></main>
+</div>
+
+<!-- Project modal -->
+<div class="overlay" id="projectOverlay">
+  <div class="modal">
+    <div class="modal-head"><h2 id="projectModalTitle">New project</h2>
+      <button class="close-x" onclick="closeModal('projectOverlay')"><svg width="18" height="18" viewBox="0 0 18 18"><path d="M4 4L14 14M14 4L4 14" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></button>
+    </div>
+    <div class="modal-body">
+      <div class="field"><label for="pf-name">Project name</label><input type="text" id="pf-name" placeholder="e.g. Reducing surgical site infections"></div>
+      <div class="field"><label for="pf-objectives">Objectives</label><textarea id="pf-objectives" placeholder="What is this project trying to achieve?"></textarea></div>
+      <div class="field-row">
+        <div class="field"><label for="pf-start">Start date</label><input type="date" id="pf-start"></div>
+        <div class="field"><label for="pf-duration">Duration</label>
+          <div style="display:flex;gap:8px;">
+            <input type="number" id="pf-duration-val" min="1" placeholder="12" style="width:90px;">
+            <select id="pf-duration-unit" style="flex:1;"><option value="weeks">weeks</option><option value="months" selected>months</option><option value="years">years</option></select>
+          </div>
+        </div>
+      </div>
+      <div class="field"><label for="pf-baseline">Baseline status</label><textarea id="pf-baseline" placeholder="Where things stand today"></textarea></div>
+      <div class="field"><label for="pf-success">What success looks like</label><textarea id="pf-success" placeholder="The measurable end state that tells you this project worked"></textarea></div>
+      <div class="field"><label>Reporting frequency</label>
+        <div class="radio-group" id="pf-frequency">
+          <div class="radio-pill" data-value="daily">Daily</div>
+          <div class="radio-pill selected" data-value="weekly">Weekly</div>
+          <div class="radio-pill" data-value="biweekly">Biweekly</div>
+          <div class="radio-pill" data-value="monthly">Monthly</div>
+          <div class="radio-pill" data-value="quarterly">Quarterly</div>
+        </div>
+        <div class="hint">Also controls the PDF report emailed to assigned members.</div>
+      </div>
+    </div>
+    <div class="modal-foot"><button class="btn-secondary" onclick="closeModal('projectOverlay')">Cancel</button><button class="btn-primary" id="saveProjectBtn" onclick="saveProject()">Save project</button></div>
+  </div>
+</div>
+
+<!-- Process area modal -->
+<div class="overlay" id="areaOverlay">
+  <div class="modal" style="max-width:440px;">
+    <div class="modal-head"><h2 id="areaModalTitle">New process area</h2>
+      <button class="close-x" onclick="closeModal('areaOverlay')"><svg width="18" height="18" viewBox="0 0 18 18"><path d="M4 4L14 14M14 4L4 14" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></button>
+    </div>
+    <div class="modal-body">
+      <div class="field"><label for="af-name">Name</label><input type="text" id="af-name" placeholder="e.g. TB Screening"></div>
+      <div class="field"><label for="af-description">Description (optional)</label><textarea id="af-description"></textarea></div>
+    </div>
+    <div class="modal-foot"><button class="btn-secondary" onclick="closeModal('areaOverlay')">Cancel</button><button class="btn-primary" id="saveAreaBtn" onclick="saveArea()">Save area</button></div>
+  </div>
+</div>
+
+<!-- Indicator modal -->
+<div class="overlay" id="indicatorOverlay">
+  <div class="modal">
+    <div class="modal-head"><h2 id="indicatorModalTitle">New process indicator</h2>
+      <button class="close-x" onclick="closeModal('indicatorOverlay')"><svg width="18" height="18" viewBox="0 0 18 18"><path d="M4 4L14 14M14 4L4 14" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></button>
+    </div>
+    <div class="modal-body">
+      <div class="field"><label for="if-name">Indicator name</label><input type="text" id="if-name" placeholder="e.g. Hand hygiene compliance"></div>
+      <div class="field"><label for="if-area">Process area</label>
+        <select id="if-area"><option value="">— Ungrouped —</option></select>
+      </div>
+      <div class="field"><label for="if-optimal">What optimal operation looks like</label><textarea id="if-optimal"></textarea></div>
+      <div class="field"><label>Numerator — data elements</label>
+        <div class="element-builder" id="numeratorElements"></div>
+        <button type="button" class="btn-text" onclick="addElementRow('numerator')">+ Add data element</button>
+        <div class="hint">Add more than one if it's built from several data elements — mark each as added or subtracted.</div>
+      </div>
+      <div class="field"><label>Denominator — data elements <span class="faint" style="font-weight:400;">(optional)</span></label>
+        <div class="element-builder" id="denominatorElements"></div>
+        <button type="button" class="btn-text" onclick="addElementRow('denominator')">+ Add data element</button>
+        <div class="hint">Leave empty for a straight count rather than a rate.</div>
+      </div>
+      <div class="field"><label for="if-multiplier">Rate multiplier</label>
+        <select id="if-multiplier" onchange="updateFormulaPreview()">
+          <option value="1">× 1 (raw ratio)</option><option value="100">× 100 (percentage)</option>
+          <option value="1000">× 1,000 (rate per 1,000)</option><option value="100000">× 100,000 (rate per 100,000)</option>
+        </select>
+      </div>
+      <div class="formula-preview"><div class="label">Formula</div><div class="mono" id="formulaPreview">—</div></div>
+      <div class="field-row">
+        <div class="field"><label for="if-target">Target value</label><input type="number" id="if-target" step="any" placeholder="95"></div>
+        <div class="field"><label for="if-unit">Unit</label><input type="text" id="if-unit" placeholder="%, count, minutes..."></div>
+      </div>
+      <div class="field"><label>Direction of improvement</label>
+        <div class="radio-group" id="if-direction">
+          <div class="radio-pill selected" data-value="higher">Higher is better</div>
+          <div class="radio-pill" data-value="lower">Lower is better</div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-foot"><button class="btn-secondary" onclick="closeModal('indicatorOverlay')">Cancel</button><button class="btn-primary" id="saveIndicatorBtn" onclick="saveIndicator()">Save indicator</button></div>
+  </div>
+</div>
+
+<!-- Entry modal (create + edit) -->
+<div class="overlay" id="entryOverlay">
+  <div class="modal">
+    <div class="modal-head"><h2 id="entryModalTitle">Log progress</h2>
+      <button class="close-x" onclick="closeModal('entryOverlay')"><svg width="18" height="18" viewBox="0 0 18 18"><path d="M4 4L14 14M14 4L4 14" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></button>
+    </div>
+    <div class="modal-body">
+      <div class="field"><label for="ef-date">Date</label><input type="date" id="ef-date"></div>
+      <div id="entryFieldsContainer"></div>
+      <div class="formula-preview" id="entryComputedPreview"></div>
+      <div class="field"><label for="ef-note">Note (optional)</label><textarea id="ef-note"></textarea></div>
+    </div>
+    <div class="modal-foot"><button class="btn-secondary" onclick="closeModal('entryOverlay')">Cancel</button><button class="btn-primary" id="saveEntryBtn" onclick="saveEntry()">Save entry</button></div>
+  </div>
+</div>
+
+<!-- Members modal -->
+<div class="overlay" id="membersOverlay">
+  <div class="modal">
+    <div class="modal-head"><h2>Manage members</h2>
+      <button class="close-x" onclick="closeModal('membersOverlay')"><svg width="18" height="18" viewBox="0 0 18 18"><path d="M4 4L14 14M14 4L4 14" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></button>
+    </div>
+    <div class="modal-body">
+      <p class="muted" style="font-size:12.5px;margin-top:0;">Assigned members can log entries for this project and receive its scheduled PDF report emails. Only you, as creator, can edit the project, indicators, and process areas.</p>
+      <div class="member-list" id="memberList"></div>
+      <div class="add-member-row">
+        <input type="email" id="mf-email" placeholder="teammate@example.org">
+        <button class="btn-primary" onclick="addMember()">Assign</button>
+      </div>
+      <div class="hint">They need to already have a QI Tracker account.</div>
+    </div>
+    <div class="modal-foot"><button class="btn-secondary" onclick="closeModal('membersOverlay')">Done</button></div>
+  </div>
+</div>
+
+<!-- Confirm modal -->
+<div class="overlay" id="confirmOverlay">
+  <div class="modal" style="max-width:400px;">
+    <div class="modal-body" style="padding-top:22px;">
+      <h2 style="font-size:16px;margin-bottom:8px;" id="confirmTitle">Delete this?</h2>
+      <p class="muted" style="font-size:13px;margin:0;" id="confirmBody">This can't be undone.</p>
+    </div>
+    <div class="modal-foot"><button class="btn-secondary" onclick="closeModal('confirmOverlay')">Cancel</button><button class="btn-primary" style="background:var(--brick);" id="confirmActionBtn">Delete</button></div>
+  </div>
+</div>
+
+<script src="/app.js"></script>
+</body>
+</html>

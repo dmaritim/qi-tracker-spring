@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sign in — QI Tracker</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@600;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#F5F7F6; --surface:#FFFFFF; --ink:#16262B; --ink-soft:#5B6E73; --ink-faint:#93A3A6;
+    --border:#DCE4E2; --teal:#2C6E63; --teal-dark:#1F4F47; --teal-tint:#E4EFEC; --brick:#B14A3E; --brick-tint:#F5E4E1;
+    --font-display:'Space Grotesk',sans-serif; --font-body:'Inter',sans-serif; --font-mono:'IBM Plex Mono',monospace;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--font-body);
+    min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;}
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:32px;width:100%;max-width:380px;
+    box-shadow:0 4px 24px rgba(22,38,43,0.06);}
+  .mark{display:flex;align-items:center;gap:9px;margin-bottom:4px;}
+  .mark .name{font-family:var(--font-display);font-weight:700;font-size:18px;}
+  .sub{font-size:12px;color:var(--ink-faint);font-family:var(--font-mono);margin-bottom:22px;}
+  h1{font-family:var(--font-display);font-size:18px;margin:0 0 4px;}
+  .tabs{display:flex;gap:4px;background:var(--bg);border:1px solid var(--border);border-radius:9px;padding:3px;margin-bottom:20px;}
+  .tab{flex:1;text-align:center;padding:8px;border-radius:7px;font-size:13px;font-weight:600;cursor:pointer;color:var(--ink-soft);}
+  .tab.active{background:var(--surface);color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,0.06);}
+  .field{margin-bottom:14px;}
+  .field label{display:block;font-size:12px;font-weight:600;color:var(--ink-soft);margin-bottom:5px;}
+  .field input{width:100%;padding:10px 11px;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--ink);font-size:14px;}
+  .field input:focus{outline:none;border-color:var(--teal);box-shadow:0 0 0 3px var(--teal-tint);}
+  .btn{width:100%;padding:11px;border:none;border-radius:8px;background:var(--teal);color:#fff;font-weight:600;font-size:14px;cursor:pointer;margin-top:6px;}
+  .btn:hover{background:var(--teal-dark);}
+  .btn:disabled{opacity:0.6;cursor:default;}
+  .error{background:var(--brick-tint);color:var(--brick);border-radius:7px;padding:9px 11px;font-size:12.5px;margin-bottom:14px;display:none;}
+  .error.show{display:block;}
+  .hint{font-size:11.5px;color:var(--ink-faint);margin-top:5px;}
+  form{display:none;}
+  form.active{display:block;}
+</style>
+</head>
+<body>
+  <div class="card">
+    <div class="mark">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+        <rect x="1" y="1" width="22" height="22" rx="5" fill="#2C6E63"/>
+        <path d="M5 15L8.5 10.5L11.5 13L15 7L19 12" stroke="#EAF3F0" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+        <line x1="5" y1="17.5" x2="19" y2="17.5" stroke="#EAF3F0" stroke-width="1" stroke-dasharray="1.5 1.8" stroke-linecap="round"/>
+      </svg>
+      <div class="name">QI Tracker</div>
+    </div>
+    <div class="sub">quality improvement, tracked</div>
+
+    <div class="tabs">
+      <div class="tab active" id="tabLogin" onclick="switchTab('login')">Sign in</div>
+      <div class="tab" id="tabRegister" onclick="switchTab('register')">Create account</div>
+    </div>
+
+    <div class="error" id="errorBox"></div>
+
+    <form id="loginForm" class="active" onsubmit="return doLogin(event)">
+      <div class="field"><label>Email</label><input type="email" id="li-email" required></div>
+      <div class="field"><label>Password</label><input type="password" id="li-password" required></div>
+      <button class="btn" type="submit" id="loginBtn">Sign in</button>
+      <div style="text-align:center;margin-top:12px;">
+        <a href="#" style="font-size:12px;color:var(--ink-faint);" onclick="showForgot(event)">Forgot your password?</a>
+      </div>
+    </form>
+
+    <form id="forgotForm" onsubmit="return doForgot(event)">
+      <div class="field"><label>Email</label><input type="email" id="fp-email" required>
+        <div class="hint">We'll email a reset link if that address has an account.</div>
+      </div>
+      <button class="btn" type="submit" id="forgotBtn">Send reset link</button>
+      <div style="text-align:center;margin-top:12px;">
+        <a href="#" style="font-size:12px;color:var(--ink-faint);" onclick="showTab('login', event)">Back to sign in</a>
+      </div>
+    </form>
+
+    <form id="registerForm" onsubmit="return doRegister(event)">
+      <div class="field"><label>Your name</label><input type="text" id="rg-name" required></div>
+      <div class="field"><label>Email</label><input type="email" id="rg-email" required></div>
+      <div class="field"><label>Password</label><input type="password" id="rg-password" minlength="8" required>
+        <div class="hint">At least 8 characters.</div>
+      </div>
+      <div class="field"><label>Team signup code</label><input type="text" id="rg-code" required>
+        <div class="hint">Ask whoever set up this server for the code.</div>
+      </div>
+      <button class="btn" type="submit" id="registerBtn">Create account</button>
+    </form>
+  </div>
+
+<script>
+function switchTab(which){
+  document.getElementById('tabLogin').classList.toggle('active', which==='login');
+  document.getElementById('tabRegister').classList.toggle('active', which==='register');
+  document.getElementById('loginForm').classList.toggle('active', which==='login');
+  document.getElementById('registerForm').classList.toggle('active', which==='register');
+  document.getElementById('forgotForm').classList.remove('active');
+  document.getElementById('errorBox').classList.remove('show');
+}
+function showForgot(e){
+  e.preventDefault();
+  document.getElementById('loginForm').classList.remove('active');
+  document.getElementById('registerForm').classList.remove('active');
+  document.getElementById('forgotForm').classList.add('active');
+  document.getElementById('errorBox').classList.remove('show');
+}
+function showTab(which, e){
+  if(e) e.preventDefault();
+  switchTab(which);
+}
+async function doForgot(e){
+  e.preventDefault();
+  const btn = document.getElementById('forgotBtn');
+  btn.disabled = true; btn.textContent = 'Sending…';
+  try{
+    const res = await fetch('/api/auth/forgot-password', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ email: document.getElementById('fp-email').value })
+    });
+    const data = await res.json();
+    if(!res.ok) throw new Error(data.error || 'Could not send the reset link.');
+    btn.textContent = 'Check your email';
+  }catch(err){
+    showError(err.message);
+    btn.disabled = false; btn.textContent = 'Send reset link';
+  }
+  return false;
+}
+function showError(msg){
+  const box = document.getElementById('errorBox');
+  box.textContent = msg;
+  box.classList.add('show');
+}
+async function doLogin(e){
+  e.preventDefault();
+  const btn = document.getElementById('loginBtn');
+  btn.disabled = true; btn.textContent = 'Signing in…';
+  try{
+    const res = await fetch('/api/auth/login', {
+      method:'POST', headers:{'Content-Type':'application/json'}, credentials:'include',
+      body: JSON.stringify({ email: document.getElementById('li-email').value, password: document.getElementById('li-password').value })
+    });
+    const data = await res.json();
+    if(!res.ok) throw new Error(data.error || 'Could not sign in.');
+    window.location.href = '/';
+  }catch(err){
+    showError(err.message);
+    btn.disabled = false; btn.textContent = 'Sign in';
+  }
+  return false;
+}
+async function doRegister(e){
+  e.preventDefault();
+  const btn = document.getElementById('registerBtn');
+  btn.disabled = true; btn.textContent = 'Creating account…';
+  try{
+    const res = await fetch('/api/auth/register', {
+      method:'POST', headers:{'Content-Type':'application/json'}, credentials:'include',
+      body: JSON.stringify({
+        name: document.getElementById('rg-name').value,
+        email: document.getElementById('rg-email').value,
+        password: document.getElementById('rg-password').value,
+        signupCode: document.getElementById('rg-code').value
+      })
+    });
+    const data = await res.json();
+    if(!res.ok) throw new Error(data.error || 'Could not create account.');
+    window.location.href = '/';
+  }catch(err){
+    showError(err.message);
+    btn.disabled = false; btn.textContent = 'Create account';
+  }
+  return false;
+}
+</script>
+</body>
+</html>

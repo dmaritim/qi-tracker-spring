@@ -1,0 +1,76 @@
+# ============================================================
+# Maven
+# ============================================================
+target/
+pom.xml.tag
+pom.xml.releaseBackup
+pom.xml.versionsBackup
+pom.xml.next
+release.properties
+dependency-reduced-pom.xml
+buildNumber.properties
+.mvn/timing.properties
+.mvn/wrapper/maven-wrapper.jar
+
+# ============================================================
+# Eclipse
+# ============================================================
+.settings/
+.project
+.classpath
+.factorypath
+bin/
+
+# ============================================================
+# IntelliJ IDEA
+# ============================================================
+.idea/
+*.iws
+*.iml
+*.ipr
+out/
+
+# ============================================================
+# VS Code
+# ============================================================
+.vscode/
+
+# ============================================================
+# NetBeans
+# ============================================================
+nbproject/private/
+nbbuild/
+nbdist/
+.nb-gradle/
+
+# ============================================================
+# Logs
+# ============================================================
+*.log
+logs/
+spring.log
+
+# ============================================================
+# OS junk
+# ============================================================
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ============================================================
+# Secrets / local config
+# ============================================================
+# If you ever create a local properties file with real DB/SMTP
+# passwords instead of using environment variables, keep it out
+# of git entirely.
+application-local.properties
+application-secrets.properties
+.env
+
+# ============================================================
+# Packaged artifacts
+# ============================================================
+*.war
+*.jar
+!.mvn/wrapper/maven-wrapper.jar
+*.class
