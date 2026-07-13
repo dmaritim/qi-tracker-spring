@@ -24,6 +24,7 @@ public class DashboardDtos {
 
     public record DashboardResponse(
         ProjectDtos.ProjectResponse project, StageInfo stage, SummaryInfo summary,
-        List<ProcessAreaGroup> groups, List<IndicatorTrend> ungrouped
+        List<ProcessAreaGroup> groups, List<IndicatorTrend> ungrouped,
+        List<PdsaDtos.PdsaMarker> pdsaCycles
     ) {}
 }

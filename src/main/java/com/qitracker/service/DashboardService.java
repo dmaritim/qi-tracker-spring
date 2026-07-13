@@ -2,6 +2,7 @@ package com.qitracker.service;
 
 import com.qitracker.domain.*;
 import com.qitracker.dto.DashboardDtos.*;
+import com.qitracker.dto.PdsaDtos.PdsaMarker;
 import com.qitracker.repository.EntryRepository;
 import com.qitracker.repository.IndicatorRepository;
 import org.springframework.stereotype.Service;
@@ -25,11 +26,14 @@ public class DashboardService {
     private final ProjectService projectService;
     private final IndicatorRepository indicatorRepository;
     private final EntryRepository entryRepository;
+    private final PdsaCycleService pdsaCycleService;
 
-    public DashboardService(ProjectService projectService, IndicatorRepository indicatorRepository, EntryRepository entryRepository) {
+    public DashboardService(ProjectService projectService, IndicatorRepository indicatorRepository,
+                             EntryRepository entryRepository, PdsaCycleService pdsaCycleService) {
         this.projectService = projectService;
         this.indicatorRepository = indicatorRepository;
         this.entryRepository = entryRepository;
+        this.pdsaCycleService = pdsaCycleService;
     }
 
     @Transactional(readOnly = true)
@@ -67,8 +71,9 @@ public class DashboardService {
 
         StageInfo stage = computeStage(project);
         SummaryInfo summary = computeSummary(project, indicators, allEntries, trends);
+        List<PdsaMarker> pdsaCycles = pdsaCycleService.markersForProject(projectId);
 
-        return new DashboardResponse(projectService.toResponse(project, requester, summary), stage, summary, groups, ungrouped);
+        return new DashboardResponse(projectService.toResponse(project, requester, summary), stage, summary, groups, ungrouped, pdsaCycles);
     }
 
     private record PeriodWindow(String label, LocalDate start, LocalDate endExclusive) {}

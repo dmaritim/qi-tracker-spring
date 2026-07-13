@@ -10,11 +10,13 @@ let indicators = [];
 let processAreas = [];
 let entriesByIndicator = {};
 let members = [];
+let pdsaCycles = [];
 
 let editingProjectId = null;
 let editingAreaId = null;
 let editingIndicatorId = null;
 let editingEntryId = null;
+let editingPdsaId = null;
 let activeIndicatorForEntry = null;
 let tempNumerator = [];
 let tempDenominator = [];
@@ -176,12 +178,14 @@ async function switchView(view) {
 }
 
 async function loadManageData() {
-  const [indRes, areaRes] = await Promise.all([
+  const [indRes, areaRes, pdsaRes] = await Promise.all([
     api(`/api/projects/${currentProjectId}/indicators`),
-    api(`/api/projects/${currentProjectId}/process-areas`)
+    api(`/api/projects/${currentProjectId}/process-areas`),
+    api(`/api/projects/${currentProjectId}/pdsa-cycles`)
   ]);
   indicators = indRes;
   processAreas = areaRes;
+  pdsaCycles = pdsaRes;
   entriesByIndicator = {};
   await Promise.all(indicators.map(async ind => {
     entriesByIndicator[ind.id] = await api(`/api/indicators/${ind.id}/entries`);
@@ -274,16 +278,17 @@ function renderDashboardView() {
   }
 
   for (const group of d.groups) {
-    container.innerHTML += `<div class="area-group"><div class="area-title"><h3>${escapeHtml(group.processAreaName)}</h3></div>${group.indicators.map(trendCard).join('')}</div>`;
+    container.innerHTML += `<div class="area-group"><div class="area-title"><h3>${escapeHtml(group.processAreaName)}</h3></div>${group.indicators.map(t => trendCard(t, d.pdsaCycles)).join('')}</div>`;
   }
   if (d.ungrouped.length) {
-    container.innerHTML += `<div class="area-group"><div class="area-title"><h3>Ungrouped</h3></div>${d.ungrouped.map(trendCard).join('')}</div>`;
+    container.innerHTML += `<div class="area-group"><div class="area-title"><h3>Ungrouped</h3></div>${d.ungrouped.map(t => trendCard(t, d.pdsaCycles)).join('')}</div>`;
   }
 }
 
-function trendCard(t) {
+function trendCard(t, allMarkers) {
   const statusBadge = t.onTarget === null || t.onTarget === undefined ? '' :
     (t.onTarget ? `<span class="badge ontrack">On target</span>` : `<span class="badge overdue">Off target</span>`);
+  const markers = (allMarkers || []).filter(m => m.indicatorIds && m.indicatorIds.includes(t.indicatorId));
 
   return `<div class="trend-card">
     <div class="trend-top">
@@ -294,11 +299,21 @@ function trendCard(t) {
         ${statusBadge}
       </div>
     </div>
-    <div class="trend-chart">${trendLineSvg(t)}</div>
+    <div class="trend-chart">${trendLineSvg(t, markers)}</div>
   </div>`;
 }
 
-function trendLineSvg(t) {
+function periodIndexForDate(periods, dateStr) {
+  const target = new Date(dateStr).getTime();
+  let idx = 0;
+  for (let i = 0; i < periods.length; i++) {
+    if (new Date(periods[i].periodStart).getTime() <= target) idx = i;
+    else break;
+  }
+  return idx;
+}
+
+function trendLineSvg(t, markers) {
   const periods = t.periods;
   const present = periods.map((p, idx) => ({ ...p, idx })).filter(p => p.avgValue !== null && p.avgValue !== undefined);
 
@@ -306,7 +321,7 @@ function trendLineSvg(t) {
     return `<div class="faint" style="font-size:12.5px;padding:14px 0;">No entries logged yet — the line will start as soon as the first one is.</div>`;
   }
 
-  const w = 640, h = 140, padL = 40, padR = 14, padT = 14, padB = 24;
+  const w = 640, h = 140, padL = 40, padR = 14, padT = 22, padB = 24;
   const innerW = w - padL - padR, innerH = h - padT - padB;
 
   const values = present.map(p => p.avgValue);
@@ -330,6 +345,16 @@ function trendLineSvg(t) {
     return `<circle cx="${xFor(p.idx).toFixed(1)}" cy="${yFor(p.avgValue).toFixed(1)}" r="3" fill="${c}" stroke="var(--surface)" stroke-width="1.2"><title>${escapeHtml(p.periodLabel)}: ${p.avgValue}${t.unit ? ' ' + escapeHtml(t.unit) : ''}</title></circle>`;
   }).join('');
 
+  // PDSA cycle markers — a vertical line at the cycle's start date, with a small flag at the top.
+  const pdsaMarks = (markers || []).map(m => {
+    const x = xFor(periodIndexForDate(periods, m.startDate)).toFixed(1);
+    return `<g>
+      <line x1="${x}" y1="${padT}" x2="${x}" y2="${padT + innerH}" stroke="var(--ink-faint)" stroke-width="1.2" stroke-dasharray="2 2"/>
+      <circle cx="${x}" cy="${padT}" r="3" fill="var(--ink-soft)"/>
+      <title>${escapeHtml(m.title)} — started ${fmtDate(m.startDate)}</title>
+    </g>`;
+  }).join('');
+
   const firstLabel = periods[0] ? periods[0].periodLabel : '';
   const lastLabel = periods[periods.length - 1] ? periods[periods.length - 1].periodLabel : '';
 
@@ -338,6 +363,7 @@ function trendLineSvg(t) {
     <line x1="${padL}" y1="${padT + innerH}" x2="${padL + innerW}" y2="${padT + innerH}" stroke="var(--grid-line)" stroke-width="1"/>
     ${hasTarget ? `<line x1="${padL}" y1="${targetY.toFixed(1)}" x2="${padL + innerW}" y2="${targetY.toFixed(1)}" stroke="var(--steel)" stroke-width="1.2" stroke-dasharray="4 3"/>
     <text x="${padL + innerW}" y="${targetY - 4}" text-anchor="end" font-size="9.5" fill="var(--steel)" font-family="var(--font-mono)">target ${t.targetValue}</text>` : ''}
+    ${pdsaMarks}
     <path d="${linePath}" fill="none" stroke="var(--ink-soft)" stroke-width="1.6" stroke-linejoin="round"/>
     ${dots}
     <text x="${padL}" y="${h - 4}" text-anchor="start" font-size="9.5" fill="var(--ink-faint)" font-family="var(--font-mono)">${escapeHtml(firstLabel)}</text>
@@ -370,8 +396,49 @@ function renderManageView() {
       </div>
     </div>
     <div id="indicatorGroups"></div>
+
+    <div class="section-head">
+      <h2>PDSA cycles<span class="count">${pdsaCycles.length}</span></h2>
+      <div class="actions">
+        ${p.isCreator ? `<button class="btn-primary" onclick="openPdsaModal()">+ New cycle</button>` : ''}
+      </div>
+    </div>
+    <div id="pdsaList"></div>
   `;
   renderIndicatorGroups();
+  renderPdsaList();
+}
+
+function renderPdsaList() {
+  const p = dashboardData.project;
+  const container = document.getElementById('pdsaList');
+  if (pdsaCycles.length === 0) {
+    container.innerHTML = `<div class="empty-state"><h3>No PDSA cycles yet</h3><p>Document a specific test of change — what you're trying, what you predict, and what actually happened — and link it to the indicators it's meant to move.</p>${p.isCreator ? `<button class="btn-primary" onclick="openPdsaModal()">Log first cycle</button>` : ''}</div>`;
+    return;
+  }
+  const decisionLabel = { in_progress: 'In progress', adopt: 'Adopt', adapt: 'Adapt', abandon: 'Abandon' };
+  container.innerHTML = pdsaCycles.map(c => `
+    <div class="pdsa-card">
+      <div class="pdsa-top">
+        <div>
+          <h4>${escapeHtml(c.title)}</h4>
+          <div class="pdsa-dates">${fmtDate(c.startDate)}${c.endDate ? ' – ' + fmtDate(c.endDate) : ' – ongoing'}${c.processAreaName ? ' · ' + escapeHtml(c.processAreaName) : ''}</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <span class="badge ${c.actDecision}">${decisionLabel[c.actDecision] || c.actDecision}</span>
+          ${p.isCreator ? `<button class="btn-icon" onclick="openPdsaModal(${c.id})" aria-label="Edit cycle"><svg width="15" height="15" viewBox="0 0 15 15" fill="none"><path d="M9.5 2.5L12.5 5.5L5 13H2V10L9.5 2.5Z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></svg></button>
+          <button class="btn-icon" onclick="confirmDeletePdsa(${c.id})" aria-label="Delete cycle"><svg width="15" height="15" viewBox="0 0 15 15" fill="none"><path d="M3 4.5H12M6 4.5V3H9V4.5M4.5 4.5L5 12.5H10L10.5 4.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg></button>` : ''}
+        </div>
+      </div>
+      ${c.indicatorNames && c.indicatorNames.length ? `<div class="pdsa-indicators">Targets: ${c.indicatorNames.map(escapeHtml).join(', ')}</div>` : ''}
+      <div class="pdsa-body">
+        ${c.planText ? `<div><strong>Plan:</strong> ${escapeHtml(c.planText)}</div>` : ''}
+        ${c.predictionText ? `<div><strong>Prediction:</strong> ${escapeHtml(c.predictionText)}</div>` : ''}
+        ${c.doText ? `<div><strong>Do:</strong> ${escapeHtml(c.doText)}</div>` : ''}
+        ${c.studyText ? `<div><strong>Study:</strong> ${escapeHtml(c.studyText)}</div>` : ''}
+        ${c.actText ? `<div><strong>Act notes:</strong> ${escapeHtml(c.actText)}</div>` : ''}
+      </div>
+    </div>`).join('');
 }
 
 function renderIndicatorGroups() {
@@ -878,4 +945,115 @@ async function removeMember(userId) {
     members = members.filter(m => m.userId !== userId);
     renderMemberList();
   } catch (err) { alert(err.message); }
+}
+
+/* ============================================================
+   PDSA CYCLE MODAL
+   ============================================================ */
+function renderPdsaIndicatorChecklist(selectedIds) {
+  const container = document.getElementById('pd-indicators');
+  const selected = new Set(selectedIds || []);
+  if (indicators.length === 0) {
+    container.innerHTML = `<div class="empty">Add an indicator first — a cycle needs something to link to.</div>`;
+    return;
+  }
+  container.innerHTML = indicators.map(ind => `
+    <label>
+      <input type="checkbox" value="${ind.id}" ${selected.has(ind.id) ? 'checked' : ''}>
+      ${escapeHtml(ind.name)}
+    </label>`).join('');
+}
+
+function openPdsaModal(id) {
+  editingPdsaId = id || null;
+  document.getElementById('pdsaModalTitle').textContent = id ? 'Edit PDSA cycle' : 'New PDSA cycle';
+  populateAreaDropdown2('pd-area', null);
+
+  if (id) {
+    const c = pdsaCycles.find(x => x.id === id);
+    document.getElementById('pd-title').value = c.title;
+    document.getElementById('pd-start').value = c.startDate;
+    document.getElementById('pd-end').value = c.endDate || '';
+    document.getElementById('pd-area').value = c.processAreaId ? String(c.processAreaId) : '';
+    document.getElementById('pd-plan').value = c.planText || '';
+    document.getElementById('pd-prediction').value = c.predictionText || '';
+    document.getElementById('pd-do').value = c.doText || '';
+    document.getElementById('pd-study').value = c.studyText || '';
+    document.getElementById('pd-act-text').value = c.actText || '';
+    setPillGroup('pd-decision', c.actDecision);
+    renderPdsaIndicatorChecklist(c.indicatorIds);
+  } else {
+    document.getElementById('pd-title').value = '';
+    document.getElementById('pd-start').value = new Date().toISOString().slice(0, 10);
+    document.getElementById('pd-end').value = '';
+    document.getElementById('pd-area').value = '';
+    document.getElementById('pd-plan').value = '';
+    document.getElementById('pd-prediction').value = '';
+    document.getElementById('pd-do').value = '';
+    document.getElementById('pd-study').value = '';
+    document.getElementById('pd-act-text').value = '';
+    setPillGroup('pd-decision', 'in_progress');
+    renderPdsaIndicatorChecklist([]);
+  }
+  openModal('pdsaOverlay');
+}
+
+// populateAreaDropdown() already exists for the indicator modal (id="if-area") — this is the same
+// idea for the PDSA modal's own <select>, kept separate since they're different DOM elements.
+function populateAreaDropdown2(selectId, selectedId) {
+  const sel = document.getElementById(selectId);
+  sel.innerHTML = '<option value="">— None —</option>' + processAreas.map(a => `<option value="${a.id}">${escapeHtml(a.name)}</option>`).join('');
+  sel.value = selectedId ? String(selectedId) : '';
+}
+
+async function savePdsaCycle() {
+  const title = document.getElementById('pd-title').value.trim();
+  if (!title) { alert('Give the cycle a short title.'); return; }
+  const startDate = document.getElementById('pd-start').value;
+  if (!startDate) { alert('Add a start date.'); return; }
+  const areaVal = document.getElementById('pd-area').value;
+  const indicatorIds = Array.from(document.querySelectorAll('#pd-indicators input[type=checkbox]:checked')).map(cb => Number(cb.value));
+
+  const data = {
+    title,
+    processAreaId: areaVal ? Number(areaVal) : null,
+    startDate,
+    endDate: document.getElementById('pd-end').value || null,
+    planText: document.getElementById('pd-plan').value.trim(),
+    predictionText: document.getElementById('pd-prediction').value.trim(),
+    doText: document.getElementById('pd-do').value.trim(),
+    studyText: document.getElementById('pd-study').value.trim(),
+    actDecision: getPillGroup('pd-decision'),
+    actText: document.getElementById('pd-act-text').value.trim(),
+    indicatorIds,
+  };
+
+  const btn = document.getElementById('savePdsaBtn');
+  if (btn.disabled) return;
+  btn.disabled = true;
+  const originalLabel = btn.textContent;
+  btn.textContent = 'Saving…';
+  try {
+    if (editingPdsaId) await api('/api/pdsa-cycles/' + editingPdsaId, { method: 'PUT', body: JSON.stringify(data) });
+    else await api(`/api/projects/${currentProjectId}/pdsa-cycles`, { method: 'POST', body: JSON.stringify(data) });
+    closeModal('pdsaOverlay');
+    pdsaCycles = await api(`/api/projects/${currentProjectId}/pdsa-cycles`);
+    renderPdsaList();
+  } catch (err) { alert(err.message); }
+  finally { btn.disabled = false; btn.textContent = originalLabel; }
+}
+
+function confirmDeletePdsa(id) {
+  const c = pdsaCycles.find(x => x.id === id);
+  document.getElementById('confirmTitle').textContent = `Delete "${c.title}"?`;
+  document.getElementById('confirmBody').textContent = 'This removes the PDSA cycle, including its plan/study notes and its links to indicators. This can\'t be undone.';
+  document.getElementById('confirmActionBtn').onclick = async () => {
+    try {
+      await api('/api/pdsa-cycles/' + id, { method: 'DELETE' });
+      closeModal('confirmOverlay');
+      pdsaCycles = pdsaCycles.filter(x => x.id !== id);
+      renderPdsaList();
+    } catch (err) { alert(err.message); }
+  };
+  openModal('confirmOverlay');
 }

@@ -212,6 +212,23 @@
   .member-row .info .email{font-size:11.5px;color:var(--ink-faint);}
   .add-member-row{display:flex;gap:8px;}
   .add-member-row input{flex:1;}
+
+  .checklist{display:flex;flex-direction:column;gap:6px;max-height:160px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;padding:8px 10px;background:var(--bg);}
+  .checklist label{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:400;color:var(--ink);margin:0;cursor:pointer;}
+  .checklist input[type=checkbox]{width:auto;margin:0;}
+  .checklist .empty{font-size:12.5px;color:var(--ink-faint);}
+
+  .pdsa-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px 18px;margin-bottom:12px;box-shadow:var(--shadow);}
+  .pdsa-top{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap;}
+  .pdsa-top h4{font-size:14.5px;font-family:var(--font-body);font-weight:600;margin-bottom:3px;}
+  .pdsa-dates{font-size:11.5px;color:var(--ink-faint);font-family:var(--font-mono);}
+  .pdsa-indicators{font-size:12px;color:var(--ink-soft);margin-top:8px;}
+  .pdsa-body{margin-top:10px;font-size:12.5px;color:var(--ink-soft);}
+  .pdsa-body strong{color:var(--ink);}
+  .badge.in_progress{background:var(--steel-tint);color:var(--steel);}
+  .badge.adopt{background:var(--teal-tint);color:var(--teal-dark);}
+  .badge.adapt{background:var(--amber-tint);color:var(--amber);}
+  .badge.abandon{background:var(--brick-tint);color:var(--brick);}
 </style>
 </head>
 <body>
@@ -356,6 +373,42 @@
       <div class="field"><label for="ef-note">Note (optional)</label><textarea id="ef-note"></textarea></div>
     </div>
     <div class="modal-foot"><button class="btn-secondary" onclick="closeModal('entryOverlay')">Cancel</button><button class="btn-primary" id="saveEntryBtn" onclick="saveEntry()">Save entry</button></div>
+  </div>
+</div>
+
+<!-- PDSA cycle modal -->
+<div class="overlay" id="pdsaOverlay">
+  <div class="modal" style="max-width:600px;">
+    <div class="modal-head"><h2 id="pdsaModalTitle">New PDSA cycle</h2>
+      <button class="close-x" onclick="closeModal('pdsaOverlay')"><svg width="18" height="18" viewBox="0 0 18 18"><path d="M4 4L14 14M14 4L4 14" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></button>
+    </div>
+    <div class="modal-body">
+      <div class="field"><label for="pd-title">Title</label><input type="text" id="pd-title" placeholder="e.g. Nurse-led triage reminder"></div>
+      <div class="field-row">
+        <div class="field"><label for="pd-start">Start date</label><input type="date" id="pd-start"></div>
+        <div class="field"><label for="pd-end">End date <span class="faint" style="font-weight:400;">(optional)</span></label><input type="date" id="pd-end"></div>
+      </div>
+      <div class="field"><label for="pd-area">Process area <span class="faint" style="font-weight:400;">(optional)</span></label>
+        <select id="pd-area"><option value="">— None —</option></select>
+      </div>
+      <div class="field"><label>Which indicators is this cycle meant to affect?</label>
+        <div class="checklist" id="pd-indicators"></div>
+      </div>
+      <div class="field"><label for="pd-plan">Plan — what are you going to try?</label><textarea id="pd-plan"></textarea></div>
+      <div class="field"><label for="pd-prediction">Prediction — what do you expect to happen?</label><textarea id="pd-prediction"></textarea></div>
+      <div class="field"><label for="pd-do">Do — what actually happened when you ran it? <span class="faint" style="font-weight:400;">(fill in once it's underway)</span></label><textarea id="pd-do"></textarea></div>
+      <div class="field"><label for="pd-study">Study — what did the data show, compared to the prediction?</label><textarea id="pd-study"></textarea></div>
+      <div class="field"><label>Act</label>
+        <div class="radio-group" id="pd-decision">
+          <div class="radio-pill selected" data-value="in_progress">In progress</div>
+          <div class="radio-pill" data-value="adopt">Adopt</div>
+          <div class="radio-pill" data-value="adapt">Adapt</div>
+          <div class="radio-pill" data-value="abandon">Abandon</div>
+        </div>
+      </div>
+      <div class="field"><label for="pd-act-text">Act notes <span class="faint" style="font-weight:400;">(optional)</span></label><textarea id="pd-act-text" placeholder="Why this decision, and what happens next"></textarea></div>
+    </div>
+    <div class="modal-foot"><button class="btn-secondary" onclick="closeModal('pdsaOverlay')">Cancel</button><button class="btn-primary" id="savePdsaBtn" onclick="savePdsaCycle()">Save cycle</button></div>
   </div>
 </div>
 
