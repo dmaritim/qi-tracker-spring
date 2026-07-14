@@ -8,7 +8,7 @@ public class ProjectDtos {
 
     public record ProjectRequest(
         String name, String objectives, String startDate, String durationVal, String durationUnit,
-        String baseline, String success, String reportingFrequency
+        String baseline, String success, String reportingFrequency, String orgUnitUuid
     ) {}
 
     public record ProjectResponse(
@@ -18,6 +18,7 @@ public class ProjectDtos {
         @JsonProperty("isCreator") boolean isCreator,
         @JsonProperty("isMember") boolean isMember,
         Instant lastReportSentAt, Instant createdAt, Instant updatedAt,
-        DashboardDtos.SummaryInfo summary
+        DashboardDtos.SummaryInfo summary,
+        String orgUnitUuid, String orgUnitName
     ) {}
 }

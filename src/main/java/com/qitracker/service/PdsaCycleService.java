@@ -123,11 +123,16 @@ public class PdsaCycleService {
     }
 
     private void linkIndicators(PdsaCycle cycle, Project project, List<Long> indicatorIds) {
-        if (indicatorIds == null) return;
+        if (indicatorIds == null || indicatorIds.isEmpty()) return;
         List<PdsaCycleIndicator> links = new ArrayList<>();
         for (Long indicatorId : indicatorIds) {
-            Indicator indicator = indicatorRepository.findById(indicatorId).orElse(null);
-            if (indicator == null || !indicator.getProject().getId().equals(project.getId())) continue; // ignore anything not in this project
+            Indicator indicator = indicatorRepository.findById(indicatorId)
+                .orElseThrow(() -> ApiException.badRequest("One of the selected indicators no longer exists."));
+            if (!indicator.getProject().getId().equals(project.getId())) {
+                throw ApiException.badRequest(
+                    "\"" + indicator.getName() + "\" belongs to a different project — " +
+                    "a PDSA cycle can only be linked to indicators from its own project.");
+            }
             links.add(PdsaCycleIndicator.builder().cycle(cycle).indicator(indicator).build());
         }
         cycleIndicatorRepository.saveAll(links);

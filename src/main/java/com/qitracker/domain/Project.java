@@ -50,6 +50,10 @@ public class Project {
     @JoinColumn(name = "creator_id", nullable = false)
     private User creator;
 
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "org_unit_uuid", referencedColumnName = "uuid", nullable = false)
+    private OrgUnit orgUnit;
+
     @Column(name = "last_report_sent_at")
     private Instant lastReportSentAt;
 

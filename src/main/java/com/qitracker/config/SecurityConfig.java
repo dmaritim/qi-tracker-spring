@@ -46,6 +46,7 @@ public class SecurityConfig {
                     "/assets/**", "/*.css", "/*.js", "/favicon.ico",
                     "/api/auth/login", "/api/auth/register", "/api/auth/forgot-password", "/api/auth/reset-password"
                 ).permitAll()
+                .requestMatchers("/api/admin/**").hasRole("ADMIN")
                 .anyRequest().authenticated()
             )
             .exceptionHandling(eh -> eh.authenticationEntryPoint(new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED)))

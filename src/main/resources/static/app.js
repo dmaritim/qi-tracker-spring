@@ -4,6 +4,7 @@
 let currentUser = null;
 let projects = [];
 let currentProjectId = null;
+let currentPage = 'projects'; // 'projects' | 'admin'
 let currentView = 'dashboard'; // 'dashboard' | 'manage'
 let dashboardData = null;
 let indicators = [];
@@ -11,6 +12,9 @@ let processAreas = [];
 let entriesByIndicator = {};
 let members = [];
 let pdsaCycles = [];
+let manageDataProjectId = null; // which project's indicators/process areas/PDSA cycles are currently loaded
+let orgUnits = [];
+let editingOrgUnitUuid = null;
 
 let editingProjectId = null;
 let editingAreaId = null;
@@ -56,7 +60,7 @@ async function init() {
     const me = await api('/api/auth/me');
     currentUser = me.user;
     renderUserRow();
-    await loadProjectList();
+    await Promise.all([loadProjectList(), loadOrgUnits()]);
     renderProjectListView();
   } catch (err) {
     if (err.message !== 'Not signed in') {
@@ -66,12 +70,18 @@ async function init() {
 }
 init();
 
+async function loadOrgUnits() {
+  orgUnits = await api('/api/org-units');
+}
+
 function renderUserRow() {
   const row = document.getElementById('userRow');
   if (!currentUser) { row.innerHTML = ''; return; }
   const initials = currentUser.name.trim().split(/\s+/).map(w => w[0]).slice(0, 2).join('').toUpperCase();
   row.innerHTML = `
-    <div class="who"><div class="avatar">${initials}</div><div class="name">${escapeHtml(currentUser.name)}</div></div>
+    <div class="who" style="cursor:pointer;" onclick="openAccountModal()" title="Account settings">
+      <div class="avatar">${initials}</div><div class="name">${escapeHtml(currentUser.name)}</div>
+    </div>
     <button class="signout" onclick="logout()">Sign out</button>`;
 }
 
@@ -82,17 +92,112 @@ async function loadProjectList() {
 /* ============================================================
    SIDEBAR
    ============================================================ */
+let expandedOrgUnits = new Set();
+
+function buildOrgTree() {
+  const childrenByParent = {}; // parentUuid (or 'root') -> [orgUnit], sorted by name
+  const projectsByOrgUnit = {}; // orgUnitUuid -> [project], sorted by name
+
+  orgUnits.forEach(o => {
+    const key = o.parentUuid || 'root';
+    (childrenByParent[key] = childrenByParent[key] || []).push(o);
+  });
+  projects.forEach(p => {
+    const key = p.orgUnitUuid || 'root'; // every project always has one; 'root' is just a defensive fallback
+    (projectsByOrgUnit[key] = projectsByOrgUnit[key] || []).push(p);
+  });
+  Object.values(childrenByParent).forEach(arr => arr.sort((a, b) => a.name.localeCompare(b.name)));
+  Object.values(projectsByOrgUnit).forEach(arr => arr.sort((a, b) => a.name.localeCompare(b.name)));
+
+  return { childrenByParent, projectsByOrgUnit };
+}
+
+// Cumulative count = projects directly on this org unit + all projects under every descendant.
+function countProjectsUnder(uuid, tree, seen) {
+  seen = seen || new Set();
+  if (seen.has(uuid)) return 0; // guards against a corrupt/cyclical parent chain
+  seen.add(uuid);
+  let count = (tree.projectsByOrgUnit[uuid] || []).length;
+  for (const child of (tree.childrenByParent[uuid] || [])) {
+    count += countProjectsUnder(child.uuid, tree, seen);
+  }
+  return count;
+}
+
+function toggleOrgUnit(uuid) {
+  if (expandedOrgUnits.has(uuid)) expandedOrgUnits.delete(uuid);
+  else expandedOrgUnits.add(uuid);
+  renderSidebar();
+}
+
+// Expands every ancestor of a project's org unit so the currently-open project is always
+// visible in the tree, rather than hidden inside a collapsed branch.
+function expandPathToProject(projectId) {
+  const project = projects.find(p => p.id === projectId);
+  if (!project || !project.orgUnitUuid) return;
+  let cursor = orgUnits.find(o => o.uuid === project.orgUnitUuid);
+  let guard = 0;
+  while (cursor && guard < 50) {
+    expandedOrgUnits.add(cursor.uuid);
+    cursor = cursor.parentUuid ? orgUnits.find(o => o.uuid === cursor.parentUuid) : null;
+    guard++;
+  }
+}
+
+function renderOrgTreeNode(orgUnit, tree, depth) {
+  const children = tree.childrenByParent[orgUnit.uuid] || [];
+  const directProjects = tree.projectsByOrgUnit[orgUnit.uuid] || [];
+  const totalCount = countProjectsUnder(orgUnit.uuid, tree);
+  const hasContent = children.length > 0 || directProjects.length > 0;
+  const isExpanded = expandedOrgUnits.has(orgUnit.uuid);
+  const indent = 10 + depth * 14;
+
+  let html = `<button class="org-tab" style="padding-left:${indent}px;" onclick="toggleOrgUnit('${orgUnit.uuid}')">
+    <span class="org-chevron ${hasContent ? '' : 'invisible'}">${isExpanded ? '▾' : '▸'}</span>
+    <span class="org-name">${escapeHtml(orgUnit.name)}</span>
+    ${totalCount > 0 ? `<span class="org-count">${totalCount}</span>` : ''}
+  </button>`;
+
+  if (isExpanded) {
+    children.forEach(child => { html += renderOrgTreeNode(child, tree, depth + 1); });
+    directProjects.forEach(p => {
+      const isActive = currentPage === 'projects' && p.id === currentProjectId;
+      html += `<button class="project-tab ${isActive ? 'active' : ''}" style="padding-left:${indent + 16}px;" onclick="openProject(${p.id})">
+        <span class="dot" style="background:${p.isCreator ? 'var(--teal)' : (p.isMember ? 'var(--steel)' : 'var(--ink-faint)')}"></span>
+        <span class="label">${escapeHtml(p.name)}</span>
+      </button>`;
+    });
+  }
+  return html;
+}
+
 function renderSidebar() {
   const list = document.getElementById('sidebarList');
+  const adminLink = currentUser && currentUser.role === 'ADMIN'
+    ? `<button class="project-tab ${currentPage === 'admin' ? 'active' : ''}" onclick="openAdminScreen()">
+         <span class="dot" style="background:var(--amber)"></span>
+         <span class="label">Admin</span>
+       </button><div style="height:1px;background:var(--border);margin:8px 4px;"></div>`
+    : '';
+
   if (projects.length === 0) {
-    list.innerHTML = `<div class="sidebar-label">Projects</div><div style="padding:8px 10px;font-size:12.5px;color:var(--ink-faint);">No projects yet.</div>`;
+    list.innerHTML = adminLink + `<div class="sidebar-label">Projects</div><div style="padding:8px 10px;font-size:12.5px;color:var(--ink-faint);">No projects yet.</div>`;
     return;
   }
-  list.innerHTML = `<div class="sidebar-label">Projects</div>` + projects.map(p => `
-    <button class="project-tab ${p.id === currentProjectId ? 'active' : ''}" onclick="openProject(${p.id})">
+
+  const tree = buildOrgTree();
+  const roots = tree.childrenByParent['root'] || [];
+  const treeHtml = roots.map(r => renderOrgTreeNode(r, tree, 0)).join('');
+  // Any projects whose org unit somehow isn't in the loaded org unit list (shouldn't normally
+  // happen, but don't let them disappear from navigation if it does).
+  const orphanProjects = (tree.projectsByOrgUnit['root'] || []);
+  const orphanHtml = orphanProjects.map(p => `
+    <button class="project-tab ${currentPage === 'projects' && p.id === currentProjectId ? 'active' : ''}" onclick="openProject(${p.id})">
       <span class="dot" style="background:${p.isCreator ? 'var(--teal)' : (p.isMember ? 'var(--steel)' : 'var(--ink-faint)')}"></span>
       <span class="label">${escapeHtml(p.name)}</span>
     </button>`).join('');
+
+  list.innerHTML = adminLink + `<div class="sidebar-label">Projects by org unit</div>` + treeHtml + orphanHtml;
 }
 
 /* ============================================================
@@ -100,6 +205,7 @@ function renderSidebar() {
    ============================================================ */
 function renderProjectListView() {
   currentProjectId = null;
+  currentPage = 'projects';
   const el = document.getElementById('mainContent');
   if (projects.length === 0) {
     el.innerHTML = `
@@ -153,7 +259,9 @@ function renderProjectListView() {
    ============================================================ */
 async function openProject(id) {
   currentProjectId = id;
+  currentPage = 'projects';
   currentView = 'dashboard';
+  expandPathToProject(id);
   renderSidebar();
   document.getElementById('mainContent').innerHTML = `<div class="faint" style="padding:40px 0;">Loading dashboard…</div>`;
   try {
@@ -171,7 +279,7 @@ async function loadDashboard() {
 
 async function switchView(view) {
   currentView = view;
-  if (view === 'manage' && indicators.length === 0 && processAreas.length === 0) {
+  if (view === 'manage' && manageDataProjectId !== currentProjectId) {
     await loadManageData();
   }
   renderProjectShell();
@@ -190,6 +298,7 @@ async function loadManageData() {
   await Promise.all(indicators.map(async ind => {
     entriesByIndicator[ind.id] = await api(`/api/indicators/${ind.id}/entries`);
   }));
+  manageDataProjectId = currentProjectId; // mark the cache as belonging to this project
 }
 
 /* ============================================================
@@ -551,6 +660,8 @@ function toggleSidebar() { document.getElementById('sidebar').classList.toggle('
 function openProjectModal(id) {
   editingProjectId = id || null;
   document.getElementById('projectModalTitle').textContent = id ? 'Edit project' : 'New project';
+  const orgSel = document.getElementById('pf-orgunit');
+  orgSel.innerHTML = orgUnits.map(o => `<option value="${o.uuid}">${'— '.repeat(Math.max(0, (o.level || 1) - 1))}${escapeHtml(o.name)}</option>`).join('');
   if (id) {
     const p = dashboardData && dashboardData.project.id == id ? dashboardData.project : projects.find(x => x.id == id);
     document.getElementById('pf-name').value = p.name;
@@ -560,6 +671,7 @@ function openProjectModal(id) {
     document.getElementById('pf-duration-unit').value = p.durationUnit || 'months';
     document.getElementById('pf-baseline').value = p.baseline || '';
     document.getElementById('pf-success').value = p.success || '';
+    orgSel.value = p.orgUnitUuid || '';
     setPillGroup('pf-frequency', p.reportingFrequency);
   } else {
     document.getElementById('pf-name').value = '';
@@ -569,6 +681,7 @@ function openProjectModal(id) {
     document.getElementById('pf-duration-unit').value = 'months';
     document.getElementById('pf-baseline').value = '';
     document.getElementById('pf-success').value = '';
+    orgSel.value = orgUnits.length ? orgUnits[0].uuid : '';
     setPillGroup('pf-frequency', 'weekly');
   }
   openModal('projectOverlay');
@@ -588,6 +701,7 @@ async function saveProject() {
     baseline: document.getElementById('pf-baseline').value.trim(),
     success: document.getElementById('pf-success').value.trim(),
     reportingFrequency: getPillGroup('pf-frequency'),
+    orgUnitUuid: document.getElementById('pf-orgunit').value,
   };
   btn.disabled = true;
   const originalLabel = btn.textContent;
@@ -1053,6 +1167,235 @@ function confirmDeletePdsa(id) {
       closeModal('confirmOverlay');
       pdsaCycles = pdsaCycles.filter(x => x.id !== id);
       renderPdsaList();
+    } catch (err) { alert(err.message); }
+  };
+  openModal('confirmOverlay');
+}
+
+/* ============================================================
+   ACCOUNT SETTINGS
+   ============================================================ */
+function openAccountModal() {
+  document.getElementById('acc-name').value = currentUser.name;
+  document.getElementById('acc-email').value = currentUser.email;
+  document.getElementById('acc-current-pw').value = '';
+  document.getElementById('acc-new-pw').value = '';
+  document.getElementById('acc-confirm-pw').value = '';
+  openModal('accountOverlay');
+}
+
+async function saveAccountProfile() {
+  const name = document.getElementById('acc-name').value.trim();
+  const email = document.getElementById('acc-email').value.trim();
+  if (!name) { alert('Name is required.'); return; }
+  if (!email) { alert('Email is required.'); return; }
+  const btn = document.getElementById('saveAccountBtn');
+  if (btn.disabled) return;
+  btn.disabled = true;
+  const originalLabel = btn.textContent;
+  btn.textContent = 'Saving…';
+  try {
+    const res = await api('/api/account', { method: 'PUT', body: JSON.stringify({ name, email }) });
+    currentUser = res.user;
+    renderUserRow();
+    alert('Profile updated.');
+  } catch (err) { alert(err.message); }
+  finally { btn.disabled = false; btn.textContent = originalLabel; }
+}
+
+async function saveAccountPassword() {
+  const currentPassword = document.getElementById('acc-current-pw').value;
+  const newPassword = document.getElementById('acc-new-pw').value;
+  const confirmPassword = document.getElementById('acc-confirm-pw').value;
+  if (!currentPassword) { alert('Enter your current password.'); return; }
+  if (newPassword.length < 8) { alert('New password must be at least 8 characters.'); return; }
+  if (newPassword !== confirmPassword) { alert("New passwords don't match."); return; }
+  const btn = document.getElementById('saveAccountPasswordBtn');
+  if (btn.disabled) return;
+  btn.disabled = true;
+  const originalLabel = btn.textContent;
+  btn.textContent = 'Updating…';
+  try {
+    await api('/api/account/change-password', { method: 'POST', body: JSON.stringify({ currentPassword, newPassword }) });
+    document.getElementById('acc-current-pw').value = '';
+    document.getElementById('acc-new-pw').value = '';
+    document.getElementById('acc-confirm-pw').value = '';
+    alert('Password updated.');
+  } catch (err) { alert(err.message); }
+  finally { btn.disabled = false; btn.textContent = originalLabel; }
+}
+
+/* ============================================================
+   ADMIN SCREEN
+   ============================================================ */
+async function openAdminScreen() {
+  currentProjectId = null;
+  currentPage = 'admin';
+  renderSidebar();
+  const el = document.getElementById('mainContent');
+  el.innerHTML = `<div class="faint" style="padding:40px 0;">Loading…</div>`;
+  if (window.innerWidth <= 860) document.getElementById('sidebar').classList.remove('open');
+  try {
+    const [stats, users] = await Promise.all([api('/api/admin/stats'), api('/api/admin/users'), loadOrgUnits()]);
+    renderAdminScreen(stats, users);
+  } catch (err) {
+    el.innerHTML = `<div class="empty-state"><h3>Couldn't load the admin screen</h3><p>${escapeHtml(err.message)}</p></div>`;
+  }
+}
+
+function renderAdminScreen(stats, users) {
+  const el = document.getElementById('mainContent');
+  el.innerHTML = `
+    <div class="dash-header"><div><h1>Admin</h1><p>Everyone with an account, and a system-wide snapshot.</p></div></div>
+    <div class="snapshot">
+      <div class="snapshot-stats">
+        <div class="stat"><div class="num">${stats.totalUsers}</div><div class="lbl">Users</div></div>
+        <div class="stat"><div class="num">${stats.totalProjects}</div><div class="lbl">Projects</div></div>
+        <div class="stat"><div class="num">${stats.totalIndicators}</div><div class="lbl">Indicators</div></div>
+        <div class="stat"><div class="num">${stats.totalEntries}</div><div class="lbl">Entries logged</div></div>
+      </div>
+    </div>
+    <div class="section-head"><h2>Users<span class="count">${users.length}</span></h2></div>
+    <table class="entry-table" style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;">
+      <thead><tr><th style="padding-left:16px;">Name</th><th>Email</th><th>Role</th><th>Projects created</th><th>Joined</th><th style="padding-right:16px;"></th></tr></thead>
+      <tbody id="adminUserRows"></tbody>
+    </table>
+
+    <div class="section-head">
+      <h2>Org units<span class="count">${orgUnits.length}</span></h2>
+      <div class="actions"><button class="btn-primary" onclick="openOrgUnitModal()">+ New org unit</button></div>
+    </div>
+    <table class="entry-table" style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;">
+      <thead><tr><th style="padding-left:16px;">Name</th><th>Short name</th><th>Code</th><th>Parent</th><th>Level</th><th style="padding-right:16px;"></th></tr></thead>
+      <tbody id="adminOrgUnitRows"></tbody>
+    </table>
+  `;
+  renderAdminUserRows(users);
+  renderAdminOrgUnitRows();
+}
+
+function renderAdminOrgUnitRows() {
+  const tbody = document.getElementById('adminOrgUnitRows');
+  if (orgUnits.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="6" style="padding:16px;" class="faint">No org units yet.</td></tr>`;
+    return;
+  }
+  tbody.innerHTML = orgUnits.map(o => `<tr>
+    <td style="padding-left:16px;">${escapeHtml(o.name)}</td>
+    <td>${escapeHtml(o.shortName) || '—'}</td>
+    <td class="mono">${escapeHtml(o.code) || '—'}</td>
+    <td>${o.parentName ? escapeHtml(o.parentName) : '—'}</td>
+    <td class="mono">${o.level ?? '—'}</td>
+    <td style="padding-right:16px;white-space:nowrap;">
+      <button class="btn-text" onclick="openOrgUnitModal('${o.uuid}')">Edit</button>
+      <button class="btn-text danger" onclick="confirmDeleteOrgUnit('${o.uuid}')">Delete</button>
+    </td>
+  </tr>`).join('');
+}
+
+function renderAdminUserRows(users) {
+  const tbody = document.getElementById('adminUserRows');
+  tbody.innerHTML = users.map(u => {
+    const isSelf = currentUser && u.id === currentUser.id;
+    return `<tr>
+      <td style="padding-left:16px;">${escapeHtml(u.name)}${isSelf ? ' <span class="faint">(you)</span>' : ''}</td>
+      <td>${escapeHtml(u.email)}</td>
+      <td><span class="badge role">${u.role}</span></td>
+      <td class="mono">${u.projectsCreated}</td>
+      <td class="mono">${fmtDate(u.createdAt)}</td>
+      <td style="padding-right:16px;white-space:nowrap;">
+        <button class="btn-text" onclick="adminToggleRole(${u.id}, '${u.role}')">${u.role === 'ADMIN' ? 'Make member' : 'Make admin'}</button>
+        ${isSelf ? '' : `<button class="btn-text danger" onclick="adminDeleteUser(${u.id}, '${escapeHtml(u.name).replace(/'/g, "\\'")}')">Delete</button>`}
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+async function adminToggleRole(userId, currentRole) {
+  const newRole = currentRole === 'ADMIN' ? 'MEMBER' : 'ADMIN';
+  try {
+    await api(`/api/admin/users/${userId}/role`, { method: 'PUT', body: JSON.stringify({ role: newRole }) });
+    const users = await api('/api/admin/users');
+    renderAdminUserRows(users);
+  } catch (err) { alert(err.message); }
+}
+
+function adminDeleteUser(userId, name) {
+  document.getElementById('confirmTitle').textContent = `Delete "${name}"?`;
+  document.getElementById('confirmBody').textContent = "This permanently removes their account. If they've created any projects, indicators, or entries, this will fail — reassign or remove that content first.";
+  document.getElementById('confirmActionBtn').onclick = async () => {
+    try {
+      await api(`/api/admin/users/${userId}`, { method: 'DELETE' });
+      closeModal('confirmOverlay');
+      const users = await api('/api/admin/users');
+      renderAdminUserRows(users);
+    } catch (err) { alert(err.message); }
+  };
+  openModal('confirmOverlay');
+}
+
+/* ============================================================
+   ADMIN: ORG UNITS
+   ============================================================ */
+function openOrgUnitModal(uuid) {
+  editingOrgUnitUuid = uuid || null;
+  document.getElementById('orgUnitModalTitle').textContent = uuid ? 'Edit org unit' : 'New org unit';
+  const parentSel = document.getElementById('ou-parent');
+  parentSel.innerHTML = '<option value="">— None (top level) —</option>' +
+    orgUnits.filter(o => o.uuid !== uuid).map(o => `<option value="${o.uuid}">${escapeHtml(o.name)}</option>`).join('');
+
+  if (uuid) {
+    const o = orgUnits.find(x => x.uuid === uuid);
+    document.getElementById('ou-name').value = o.name;
+    document.getElementById('ou-shortname').value = o.shortName || '';
+    document.getElementById('ou-code').value = o.code || '';
+    parentSel.value = o.parentUuid || '';
+    document.getElementById('ou-level').value = o.level ?? '';
+  } else {
+    document.getElementById('ou-name').value = '';
+    document.getElementById('ou-shortname').value = '';
+    document.getElementById('ou-code').value = '';
+    parentSel.value = '';
+    document.getElementById('ou-level').value = '';
+  }
+  openModal('orgUnitOverlay');
+}
+
+async function saveOrgUnit() {
+  const name = document.getElementById('ou-name').value.trim();
+  if (!name) { alert('Give the org unit a name.'); return; }
+  const data = {
+    name,
+    shortName: document.getElementById('ou-shortname').value.trim(),
+    code: document.getElementById('ou-code').value.trim(),
+    parentUuid: document.getElementById('ou-parent').value || null,
+    level: document.getElementById('ou-level').value === '' ? null : Number(document.getElementById('ou-level').value),
+  };
+  const btn = document.getElementById('saveOrgUnitBtn');
+  if (btn.disabled) return;
+  btn.disabled = true;
+  const originalLabel = btn.textContent;
+  btn.textContent = 'Saving…';
+  try {
+    if (editingOrgUnitUuid) await api('/api/org-units/' + editingOrgUnitUuid, { method: 'PUT', body: JSON.stringify(data) });
+    else await api('/api/org-units', { method: 'POST', body: JSON.stringify(data) });
+    closeModal('orgUnitOverlay');
+    await loadOrgUnits();
+    renderAdminOrgUnitRows();
+  } catch (err) { alert(err.message); }
+  finally { btn.disabled = false; btn.textContent = originalLabel; }
+}
+
+function confirmDeleteOrgUnit(uuid) {
+  const o = orgUnits.find(x => x.uuid === uuid);
+  document.getElementById('confirmTitle').textContent = `Delete "${o.name}"?`;
+  document.getElementById('confirmBody').textContent = "If any projects or child org units still point at this one, deletion will fail — move or remove those first.";
+  document.getElementById('confirmActionBtn').onclick = async () => {
+    try {
+      await api('/api/org-units/' + uuid, { method: 'DELETE' });
+      closeModal('confirmOverlay');
+      await loadOrgUnits();
+      renderAdminOrgUnitRows();
     } catch (err) { alert(err.message); }
   };
   openModal('confirmOverlay');

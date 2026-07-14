@@ -2,6 +2,7 @@ package com.qitracker.service;
 
 import com.qitracker.domain.Entry;
 import com.qitracker.domain.Indicator;
+import com.qitracker.domain.OrgUnit;
 import com.qitracker.domain.Project;
 import com.qitracker.domain.ReportingFrequency;
 import com.qitracker.domain.User;
@@ -11,6 +12,7 @@ import com.qitracker.dto.ProjectDtos.ProjectResponse;
 import com.qitracker.exception.ApiException;
 import com.qitracker.repository.EntryRepository;
 import com.qitracker.repository.IndicatorRepository;
+import com.qitracker.repository.OrgUnitRepository;
 import com.qitracker.repository.ProjectRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -25,18 +27,24 @@ import java.util.Map;
 @Service
 public class ProjectService {
 
+    // Seeded by the V5 migration — the fallback every project used to point at before this
+    // feature existed, and still the default if a project is created without picking one.
+    private static final String DEFAULT_ORG_UNIT_UUID = "00000000-0000-0000-0000-000000000000";
+
     private final ProjectRepository projectRepository;
     private final IndicatorRepository indicatorRepository;
     private final EntryRepository entryRepository;
+    private final OrgUnitRepository orgUnitRepository;
     private final ProjectAccessService accessService;
     private final ProjectSummaryService summaryService;
 
     public ProjectService(ProjectRepository projectRepository, IndicatorRepository indicatorRepository,
-                           EntryRepository entryRepository, ProjectAccessService accessService,
-                           ProjectSummaryService summaryService) {
+                           EntryRepository entryRepository, OrgUnitRepository orgUnitRepository,
+                           ProjectAccessService accessService, ProjectSummaryService summaryService) {
         this.projectRepository = projectRepository;
         this.indicatorRepository = indicatorRepository;
         this.entryRepository = entryRepository;
+        this.orgUnitRepository = orgUnitRepository;
         this.accessService = accessService;
         this.summaryService = summaryService;
     }
@@ -86,6 +94,7 @@ public class ProjectService {
             .successDefinition(nullToEmpty(req.success()))
             .reportingFrequency(parseFrequency(req.reportingFrequency()))
             .creator(creator)
+            .orgUnit(resolveOrgUnit(req.orgUnitUuid()))
             .build();
         project = projectRepository.save(project);
         return toResponse(project, creator);
@@ -104,6 +113,7 @@ public class ProjectService {
         project.setBaseline(nullToEmpty(req.baseline()));
         project.setSuccessDefinition(nullToEmpty(req.success()));
         project.setReportingFrequency(parseFrequency(req.reportingFrequency()));
+        project.setOrgUnit(resolveOrgUnit(req.orgUnitUuid()));
         project.setUpdatedAt(Instant.now());
         project = projectRepository.save(project);
         return toResponse(project, requester);
@@ -139,7 +149,9 @@ public class ProjectService {
             p.getCreator().getId(), p.getCreator().getName(),
             isCreator, isMember,
             p.getLastReportSentAt(), p.getCreatedAt(), p.getUpdatedAt(),
-            summary
+            summary,
+            p.getOrgUnit() == null ? null : p.getOrgUnit().getUuid(),
+            p.getOrgUnit() == null ? null : p.getOrgUnit().getName()
         );
     }
 
@@ -157,5 +169,11 @@ public class ProjectService {
     private ReportingFrequency parseFrequency(String s) {
         if (s == null) return ReportingFrequency.weekly;
         try { return ReportingFrequency.valueOf(s.toLowerCase()); } catch (Exception e) { return ReportingFrequency.weekly; }
+    }
+
+    private OrgUnit resolveOrgUnit(String orgUnitUuid) {
+        String uuid = (orgUnitUuid == null || orgUnitUuid.isBlank()) ? DEFAULT_ORG_UNIT_UUID : orgUnitUuid;
+        return orgUnitRepository.findById(uuid)
+            .orElseThrow(() -> ApiException.badRequest("Selected org unit doesn't exist."));
     }
 }

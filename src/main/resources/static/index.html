@@ -35,6 +35,13 @@
   .project-tab.active{background:var(--teal-tint);border-color:#CDE1DB;}
   .project-tab .dot{width:8px;height:8px;border-radius:2px;flex-shrink:0;}
   .project-tab .label{flex:1;font-size:13.5px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+
+  .org-tab{display:flex;align-items:center;gap:7px;width:100%;text-align:left;padding:8px 10px;border-radius:8px;border:1px solid transparent;background:transparent;cursor:pointer;color:var(--ink);margin-bottom:1px;}
+  .org-tab:hover{background:var(--grey-tint);}
+  .org-chevron{width:12px;flex-shrink:0;font-size:10px;color:var(--ink-faint);text-align:center;}
+  .org-chevron.invisible{visibility:hidden;}
+  .org-name{flex:1;font-size:13px;font-weight:600;color:var(--ink-soft);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .org-count{font-family:var(--font-mono);font-size:10.5px;color:var(--ink-faint);background:var(--grey-tint);border-radius:10px;padding:1px 7px;flex-shrink:0;}
   .sidebar-footer{padding:14px;border-top:1px solid var(--border);}
   .btn-new-project{width:100%;padding:10px 12px;border-radius:8px;border:1px dashed #BFD0CB;background:var(--teal-tint);color:var(--teal-dark);font-weight:600;font-size:13px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;}
   .btn-new-project:hover{background:#D9EAE4;}
@@ -287,6 +294,10 @@
       </div>
       <div class="field"><label for="pf-baseline">Baseline status</label><textarea id="pf-baseline" placeholder="Where things stand today"></textarea></div>
       <div class="field"><label for="pf-success">What success looks like</label><textarea id="pf-success" placeholder="The measurable end state that tells you this project worked"></textarea></div>
+      <div class="field"><label for="pf-orgunit">Org unit</label>
+        <select id="pf-orgunit"></select>
+        <div class="hint">The facility, district, or other organizational unit this project belongs to.</div>
+      </div>
       <div class="field"><label>Reporting frequency</label>
         <div class="radio-group" id="pf-frequency">
           <div class="radio-pill" data-value="daily">Daily</div>
@@ -428,6 +439,53 @@
       <div class="hint">They need to already have a QI Tracker account.</div>
     </div>
     <div class="modal-foot"><button class="btn-secondary" onclick="closeModal('membersOverlay')">Done</button></div>
+  </div>
+</div>
+
+<!-- Account settings modal -->
+<div class="overlay" id="accountOverlay">
+  <div class="modal">
+    <div class="modal-head"><h2>Account settings</h2>
+      <button class="close-x" onclick="closeModal('accountOverlay')"><svg width="18" height="18" viewBox="0 0 18 18"><path d="M4 4L14 14M14 4L4 14" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></button>
+    </div>
+    <div class="modal-body">
+      <div class="eyebrow">Profile</div>
+      <div class="field"><label for="acc-name">Name</label><input type="text" id="acc-name"></div>
+      <div class="field"><label for="acc-email">Email</label><input type="email" id="acc-email">
+        <div class="hint">Used to sign in — changing it takes effect next time you log in.</div>
+      </div>
+      <button class="btn-primary" id="saveAccountBtn" onclick="saveAccountProfile()">Save profile</button>
+
+      <div class="eyebrow" style="margin-top:26px;">Change password</div>
+      <div class="field"><label for="acc-current-pw">Current password</label><input type="password" id="acc-current-pw"></div>
+      <div class="field"><label for="acc-new-pw">New password</label><input type="password" id="acc-new-pw" minlength="8">
+        <div class="hint">At least 8 characters.</div>
+      </div>
+      <div class="field"><label for="acc-confirm-pw">Confirm new password</label><input type="password" id="acc-confirm-pw"></div>
+      <button class="btn-primary" id="saveAccountPasswordBtn" onclick="saveAccountPassword()">Update password</button>
+    </div>
+    <div class="modal-foot"><button class="btn-secondary" onclick="closeModal('accountOverlay')">Close</button></div>
+  </div>
+</div>
+
+<!-- Org unit modal (admin) -->
+<div class="overlay" id="orgUnitOverlay">
+  <div class="modal" style="max-width:460px;">
+    <div class="modal-head"><h2 id="orgUnitModalTitle">New org unit</h2>
+      <button class="close-x" onclick="closeModal('orgUnitOverlay')"><svg width="18" height="18" viewBox="0 0 18 18"><path d="M4 4L14 14M14 4L4 14" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></button>
+    </div>
+    <div class="modal-body">
+      <div class="field"><label for="ou-name">Name</label><input type="text" id="ou-name" placeholder="e.g. Kisumu District Hospital"></div>
+      <div class="field-row">
+        <div class="field"><label for="ou-shortname">Short name</label><input type="text" id="ou-shortname"></div>
+        <div class="field"><label for="ou-code">Code</label><input type="text" id="ou-code"></div>
+      </div>
+      <div class="field"><label for="ou-parent">Parent org unit <span class="faint" style="font-weight:400;">(optional)</span></label>
+        <select id="ou-parent"><option value="">— None (top level) —</option></select>
+      </div>
+      <div class="field"><label for="ou-level">Level</label><input type="number" id="ou-level" min="1" placeholder="e.g. 1 for country, 2 for region..."></div>
+    </div>
+    <div class="modal-foot"><button class="btn-secondary" onclick="closeModal('orgUnitOverlay')">Cancel</button><button class="btn-primary" id="saveOrgUnitBtn" onclick="saveOrgUnit()">Save org unit</button></div>
   </div>
 </div>
 
