@@ -43,7 +43,7 @@ public class SecurityConfig {
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers(
                     "/", "/index.html", "/login.html", "/reset-password.html",
-                    "/assets/**", "/*.css", "/*.js", "/favicon.ico",
+                    "/assets/**", "/*.css", "/*.js", "/*.png", "/*.jpg", "/*.svg", "/favicon.ico",
                     "/api/auth/login", "/api/auth/register", "/api/auth/forgot-password", "/api/auth/reset-password"
                 ).permitAll()
                 .requestMatchers("/api/admin/**").hasRole("ADMIN")

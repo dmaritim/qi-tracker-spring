@@ -18,6 +18,7 @@
   .card{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:32px;width:100%;max-width:380px;
     box-shadow:0 4px 24px rgba(22,38,43,0.06);}
   .mark{display:flex;align-items:center;gap:9px;margin-bottom:4px;}
+  .brand-logo{height:26px;width:auto;max-width:120px;object-fit:contain;flex-shrink:0;}
   .mark .name{font-family:var(--font-display);font-weight:700;font-size:18px;}
   .sub{font-size:12px;color:var(--ink-faint);font-family:var(--font-mono);margin-bottom:22px;}
   h1{font-family:var(--font-display);font-size:18px;margin:0 0 4px;}
@@ -41,11 +42,7 @@
 <body>
   <div class="card">
     <div class="mark">
-      <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
-        <rect x="1" y="1" width="22" height="22" rx="5" fill="#2C6E63"/>
-        <path d="M5 15L8.5 10.5L11.5 13L15 7L19 12" stroke="#EAF3F0" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
-        <line x1="5" y1="17.5" x2="19" y2="17.5" stroke="#EAF3F0" stroke-width="1" stroke-dasharray="1.5 1.8" stroke-linecap="round"/>
-      </svg>
+      <img src="/ampath.png" alt="AMPATH" class="brand-logo" onerror="this.style.display='none'">
       <div class="name">QI Tracker</div>
     </div>
     <div class="sub">quality improvement, tracked</div>
