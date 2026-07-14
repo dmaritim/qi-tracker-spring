@@ -93,6 +93,7 @@ async function loadProjectList() {
    SIDEBAR
    ============================================================ */
 let expandedOrgUnits = new Set();
+let selectedOrgUnitFilter = null; // uuid of the org unit currently filtering the project grid, or null for all
 
 function buildOrgTree() {
   const childrenByParent = {}; // parentUuid (or 'root') -> [orgUnit], sorted by name
@@ -124,10 +125,41 @@ function countProjectsUnder(uuid, tree, seen) {
   return count;
 }
 
-function toggleOrgUnit(uuid) {
+// Same "cumulative" idea as countProjectsUnder, but returns the actual uuid set instead of a
+// count, so it can be used to filter the project grid to "this org unit and everything below it".
+function orgUnitAndDescendantUuids(rootUuid) {
+  const result = new Set([rootUuid]);
+  let addedMore = true;
+  while (addedMore) {
+    addedMore = false;
+    orgUnits.forEach(o => {
+      if (o.parentUuid && result.has(o.parentUuid) && !result.has(o.uuid)) {
+        result.add(o.uuid);
+        addedMore = true;
+      }
+    });
+  }
+  return result;
+}
+
+// Clicking an org unit in the tree both expands/collapses it and selects it as the active
+// filter for the Projects grid — clicking the same (already-selected) node again clears the
+// filter, so there's always a quick way back to "show everything" from the tree itself.
+function selectOrgUnitFilter(uuid) {
   if (expandedOrgUnits.has(uuid)) expandedOrgUnits.delete(uuid);
   else expandedOrgUnits.add(uuid);
+
+  selectedOrgUnitFilter = (selectedOrgUnitFilter === uuid) ? null : uuid;
+  currentProjectId = null;
+  currentPage = 'projects';
   renderSidebar();
+  renderProjectListView();
+}
+
+function clearOrgUnitFilter() {
+  selectedOrgUnitFilter = null;
+  renderSidebar();
+  renderProjectListView();
 }
 
 // Expands every ancestor of a project's org unit so the currently-open project is always
@@ -150,9 +182,10 @@ function renderOrgTreeNode(orgUnit, tree, depth) {
   const totalCount = countProjectsUnder(orgUnit.uuid, tree);
   const hasContent = children.length > 0 || directProjects.length > 0;
   const isExpanded = expandedOrgUnits.has(orgUnit.uuid);
+  const isSelected = selectedOrgUnitFilter === orgUnit.uuid;
   const indent = 10 + depth * 14;
 
-  let html = `<button class="org-tab" style="padding-left:${indent}px;" onclick="toggleOrgUnit('${orgUnit.uuid}')">
+  let html = `<button class="org-tab ${isSelected ? 'selected' : ''}" style="padding-left:${indent}px;" onclick="selectOrgUnitFilter('${orgUnit.uuid}')">
     <span class="org-chevron ${hasContent ? '' : 'invisible'}">${isExpanded ? '▾' : '▸'}</span>
     <span class="org-name">${escapeHtml(orgUnit.name)}</span>
     ${totalCount > 0 ? `<span class="org-count">${totalCount}</span>` : ''}
@@ -197,7 +230,12 @@ function renderSidebar() {
       <span class="label">${escapeHtml(p.name)}</span>
     </button>`).join('');
 
-  list.innerHTML = adminLink + `<div class="sidebar-label">Projects by org unit</div>` + treeHtml + orphanHtml;
+  const labelHtml = selectedOrgUnitFilter
+    ? `<div class="sidebar-label" style="display:flex;justify-content:space-between;align-items:center;cursor:pointer;" onclick="clearOrgUnitFilter()" title="Clear filter">
+         <span>Filtered</span><span style="text-transform:none;font-weight:600;color:var(--teal-dark);">Show all ×</span>
+       </div>`
+    : `<div class="sidebar-label">Projects by org unit</div>`;
+  list.innerHTML = adminLink + labelHtml + treeHtml + orphanHtml;
 }
 
 /* ============================================================
@@ -207,6 +245,21 @@ function renderProjectListView() {
   currentProjectId = null;
   currentPage = 'projects';
   const el = document.getElementById('mainContent');
+
+  let visibleProjects = projects;
+  let filterOrgUnit = null;
+  if (selectedOrgUnitFilter) {
+    filterOrgUnit = orgUnits.find(o => o.uuid === selectedOrgUnitFilter);
+    const allowedUuids = orgUnitAndDescendantUuids(selectedOrgUnitFilter);
+    visibleProjects = projects.filter(p => p.orgUnitUuid && allowedUuids.has(p.orgUnitUuid));
+  }
+
+  const filterBanner = filterOrgUnit ? `
+    <div style="display:flex;align-items:center;gap:8px;background:var(--teal-tint);border:1px solid #CDE1DB;border-radius:8px;padding:8px 14px;margin-bottom:18px;font-size:13px;color:var(--teal-dark);">
+      Showing projects under <strong>${escapeHtml(filterOrgUnit.name)}</strong> and below
+      <button class="btn-text" style="margin-left:auto;color:var(--teal-dark);" onclick="clearOrgUnitFilter()">Clear filter</button>
+    </div>` : '';
+
   if (projects.length === 0) {
     el.innerHTML = `
       <div class="dash-header"><div><h1>Quality improvement, tracked</h1><p>Run every QI project from one place — objectives, process areas, indicators, and progress against target.</p></div></div>
@@ -214,6 +267,16 @@ function renderProjectListView() {
     renderSidebar();
     return;
   }
+
+  if (visibleProjects.length === 0) {
+    el.innerHTML = `
+      <div class="dash-header"><div><h1>Projects</h1><p>Everything your team is tracking. Open one for its live dashboard.</p></div></div>
+      ${filterBanner}
+      <div class="empty-state"><h3>No projects under ${escapeHtml(filterOrgUnit ? filterOrgUnit.name : 'this org unit')}</h3><p>Nothing here yet — try a different branch, or clear the filter to see everything.</p></div>`;
+    renderSidebar();
+    return;
+  }
+
   el.innerHTML = `
     <div class="dash-header">
       <div><h1>Projects</h1><p>Everything your team is tracking. Open one for its live dashboard.</p></div>
@@ -222,8 +285,9 @@ function renderProjectListView() {
         New project
       </button>
     </div>
+    ${filterBanner}
     <div class="project-grid">
-      ${projects.map(p => {
+      ${visibleProjects.map(p => {
         const s = p.summary || {};
         const statusMap = { ontrack: ['On track', 'ontrack'], duesoon: ['Due soon', 'duesoon'], overdue: ['Overdue', 'overdue'], nodata: ['No data yet', 'nodata'] };
         const [statusLabel, statusClass] = statusMap[s.projectStatus] || statusMap.nodata;
@@ -336,6 +400,7 @@ function renderProjectShell() {
 
 function backToList() {
   currentProjectId = null;
+  selectedOrgUnitFilter = null;
   renderProjectListView();
 }
 
@@ -681,7 +746,11 @@ function openProjectModal(id) {
     document.getElementById('pf-duration-unit').value = 'months';
     document.getElementById('pf-baseline').value = '';
     document.getElementById('pf-success').value = '';
-    orgSel.value = orgUnits.length ? orgUnits[0].uuid : '';
+    // Prefer whatever org unit is currently selected in the sidebar tree filter, so creating a
+    // project while browsing "District X" defaults sensibly instead of jumping to the first
+    // org unit in the list.
+    const defaultOrgUnit = selectedOrgUnitFilter || (orgUnits.length ? orgUnits[0].uuid : '');
+    orgSel.value = defaultOrgUnit;
     setPillGroup('pf-frequency', 'weekly');
   }
   openModal('projectOverlay');

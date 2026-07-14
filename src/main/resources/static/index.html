@@ -42,6 +42,9 @@
   .org-chevron.invisible{visibility:hidden;}
   .org-name{flex:1;font-size:13px;font-weight:600;color:var(--ink-soft);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
   .org-count{font-family:var(--font-mono);font-size:10.5px;color:var(--ink-faint);background:var(--grey-tint);border-radius:10px;padding:1px 7px;flex-shrink:0;}
+  .org-tab.selected{background:var(--teal-tint);border-color:#CDE1DB;}
+  .org-tab.selected .org-name{color:var(--teal-dark);}
+  .org-tab.selected .org-count{background:var(--surface);color:var(--teal-dark);}
   .sidebar-footer{padding:14px;border-top:1px solid var(--border);}
   .btn-new-project{width:100%;padding:10px 12px;border-radius:8px;border:1px dashed #BFD0CB;background:var(--teal-tint);color:var(--teal-dark);font-weight:600;font-size:13px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;}
   .btn-new-project:hover{background:#D9EAE4;}
